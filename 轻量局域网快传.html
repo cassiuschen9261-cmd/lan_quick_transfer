@@ -577,6 +577,58 @@
             background: linear-gradient(90deg, #4f46e5 0%, #3b82f6 100%);
             transition: width 0.2s ease;
         }
+        .upload-task-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .upload-task-item {
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: #f9fafb;
+        }
+        .upload-task-item.error {
+            border-color: #fecaca;
+            background: #fef2f2;
+        }
+        .upload-task-item.done {
+            border-color: #bbf7d0;
+            background: #f0fdf4;
+        }
+        .upload-task-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        .upload-task-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-main);
+            word-break: break-all;
+        }
+        .upload-task-meta {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 3px;
+        }
+        .upload-task-state {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .upload-task-item.error .upload-task-state {
+            color: #dc2626;
+        }
+        .upload-task-item.done .upload-task-state {
+            color: #16a34a;
+        }
         .download-status {
             padding: 0 24px 16px;
             background: white;
@@ -865,6 +917,7 @@
                     <span>速度 --</span>
                     <span>剩余 --</span>
                 </div>
+                <div class="upload-task-list" id="uploadTaskList"></div>
             </div>
             <div class="download-status" id="downloadStatus">
                 <div class="upload-status-text">下载任务</div>
@@ -880,6 +933,8 @@
         let serverInfo = null;
         let storageInfo = null;
         let isUploadingBatch = false;
+        let uploadTaskId = 0;
+        let uploadTasks = [];
         let downloadTaskId = 0;
         let downloadTasks = [];
         let currentQuickShareUrl = '';
@@ -1761,6 +1816,7 @@
             const textEl = document.getElementById('uploadStatusText');
             const fillEl = document.getElementById('uploadProgressFill');
             const metaEl = document.getElementById('uploadStatusMeta');
+            const taskListEl = document.getElementById('uploadTaskList');
 
             if (visible) {
                 panel.classList.add('active');
@@ -1778,7 +1834,91 @@
                 textEl.textContent = '准备上传...';
                 fillEl.style.width = '0%';
                 metaEl.innerHTML = '<span>速度 --</span><span>剩余 --</span>';
+                uploadTasks = [];
+                taskListEl.innerHTML = '';
             }
+        }
+
+        function renderUploadTasks() {
+            const list = document.getElementById('uploadTaskList');
+            if (!uploadTasks.length) {
+                list.innerHTML = '';
+                return;
+            }
+
+            list.innerHTML = uploadTasks.map(task => {
+                const itemClass = task.status === 'error'
+                    ? 'upload-task-item error'
+                    : task.status === 'done'
+                        ? 'upload-task-item done'
+                        : 'upload-task-item';
+                const progress = Math.min(100, Math.max(0, task.progress || 0));
+                const meta = task.meta || {};
+                const sizeText = meta.totalBytes
+                    ? `${formatBytes(meta.loadedBytes || 0)} / ${formatBytes(meta.totalBytes)}`
+                    : formatBytes(task.file.size);
+                const speedText = meta.speed ? formatSpeed(meta.speed) : '--';
+                const remainingText = Number.isFinite(meta.remainingSeconds)
+                    ? formatRemainingTime(meta.remainingSeconds)
+                    : '--';
+                const stateText = task.status === 'done'
+                    ? '已完成'
+                    : task.status === 'error'
+                        ? (task.error || '上传失败')
+                        : task.status === 'retrying'
+                            ? '重试中'
+                            : task.status === 'uploading'
+                                ? `${progress.toFixed(1)}%`
+                                : '等待中';
+                const retryButton = task.status === 'error'
+                    ? `<button class="small-btn" data-upload-retry-id="${task.id}">重试</button>`
+                    : '';
+
+                return `
+                    <div class="${itemClass}">
+                        <div class="upload-task-top">
+                            <div>
+                                <div class="upload-task-name">${escapeHtml(task.name)}</div>
+                                <div class="upload-task-meta">${escapeHtml(`${sizeText} | ${speedText} | 剩余 ${remainingText}`)}</div>
+                            </div>
+                            <div class="upload-task-state">
+                                <span>${escapeHtml(stateText)}</span>
+                                ${retryButton}
+                            </div>
+                        </div>
+                        <div class="upload-progress-track">
+                            <div class="upload-progress-fill" style="width: ${progress}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function createUploadTasks(files) {
+            uploadTasks = files.map(file => ({
+                id: ++uploadTaskId,
+                file,
+                name: getDisplayFileName(file),
+                progress: 0,
+                status: 'pending',
+                meta: { loadedBytes: 0, totalBytes: file.size }
+            }));
+            renderUploadTasks();
+        }
+
+        function getUploadTaskById(taskId) {
+            return uploadTasks.find(task => task.id === taskId);
+        }
+
+        function updateUploadTask(taskId, updates) {
+            uploadTasks = uploadTasks.map(task => task.id === taskId ? { ...task, ...updates } : task);
+            renderUploadTasks();
+        }
+
+        async function retryUploadTask(taskId) {
+            const task = getUploadTaskById(taskId);
+            if (!task || task.status !== 'error') return;
+            await uploadFiles([task.file]);
         }
 
         function formatBytes(bytes) {
@@ -2111,7 +2251,7 @@
             });
         }
 
-        async function uploadSingleFileResumable(file, index, totalCount) {
+        async function uploadSingleFileResumable(file, index, totalCount, taskId = null) {
             const displayName = getDisplayFileName(file);
             const relativePath = getRelativeFilePath(file);
             const fileKey = getFileKey(file);
@@ -2143,11 +2283,29 @@
             const startedAt = Date.now();
             let uploadedBytes = 0;
 
+            if (taskId) {
+                updateUploadTask(taskId, {
+                    status: 'uploading',
+                    progress: 0,
+                    error: '',
+                    meta: buildUploadMeta(0, file.size, startedAt)
+                });
+            }
+
             for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
                 if (uploadedSet.has(chunkIndex)) {
                     uploadedBytes += getChunkUploadedBytes(file.size, chunkSize, chunkIndex);
                     const skippedProgress = ((index + ((chunkIndex + 1) / totalChunks)) / totalCount) * 100;
-                    setUploadProgress(`继续续传 (${index + 1}/${totalCount}) ${displayName}`, skippedProgress, true, buildUploadMeta(uploadedBytes, file.size, startedAt));
+                    const taskProgress = ((chunkIndex + 1) / totalChunks) * 100;
+                    const taskMeta = buildUploadMeta(uploadedBytes, file.size, startedAt);
+                    setUploadProgress(`继续续传 (${index + 1}/${totalCount}) ${displayName}`, skippedProgress, true, taskMeta);
+                    if (taskId) {
+                        updateUploadTask(taskId, {
+                            status: 'uploading',
+                            progress: taskProgress,
+                            meta: taskMeta
+                        });
+                    }
                     continue;
                 }
 
@@ -2159,18 +2317,42 @@
                     const currentUploadedBytes = uploadedBytes + Math.round(chunkBlob.size * chunkRatio);
                     const fileProgress = (chunkIndex + chunkRatio) / totalChunks;
                     const overallProgress = ((index + fileProgress) / totalCount) * 100;
-                    setUploadProgress(`正在上传 (${index + 1}/${totalCount}) ${displayName}`, overallProgress, true, buildUploadMeta(currentUploadedBytes, file.size, startedAt));
+                    const taskMeta = buildUploadMeta(currentUploadedBytes, file.size, startedAt);
+                    setUploadProgress(`正在上传 (${index + 1}/${totalCount}) ${displayName}`, overallProgress, true, taskMeta);
+                    if (taskId) {
+                        updateUploadTask(taskId, {
+                            status: 'uploading',
+                            progress: fileProgress * 100,
+                            meta: taskMeta
+                        });
+                    }
                 }, (retryAttempt) => {
                     const retryProgress = ((index + (chunkIndex / totalChunks)) / totalCount) * 100;
-                    setUploadProgress(`网络波动，正在重试 (${index + 1}/${totalCount}) ${displayName}`, retryProgress, true, {
+                    const taskMeta = {
                         ...buildUploadMeta(uploadedBytes, file.size, startedAt),
                         retryAttempt
-                    });
+                    };
+                    setUploadProgress(`网络波动，正在重试 (${index + 1}/${totalCount}) ${displayName}`, retryProgress, true, taskMeta);
+                    if (taskId) {
+                        updateUploadTask(taskId, {
+                            status: 'retrying',
+                            progress: (chunkIndex / totalChunks) * 100,
+                            meta: taskMeta
+                        });
+                    }
                 });
 
                 uploadedBytes += chunkBlob.size;
                 const completedProgress = ((index + ((chunkIndex + 1) / totalChunks)) / totalCount) * 100;
-                setUploadProgress(`正在上传 (${index + 1}/${totalCount}) ${displayName}`, completedProgress, true, buildUploadMeta(uploadedBytes, file.size, startedAt));
+                const completedTaskMeta = buildUploadMeta(uploadedBytes, file.size, startedAt);
+                setUploadProgress(`正在上传 (${index + 1}/${totalCount}) ${displayName}`, completedProgress, true, completedTaskMeta);
+                if (taskId) {
+                    updateUploadTask(taskId, {
+                        status: 'uploading',
+                        progress: ((chunkIndex + 1) / totalChunks) * 100,
+                        meta: completedTaskMeta
+                    });
+                }
             }
 
             const completeResponse = await apiFetch('/api/chat/upload/complete', {
@@ -2186,6 +2368,15 @@
             const completeData = await completeResponse.json();
             if (!completeData.success) {
                 throw new Error(completeData.error || '合并上传文件失败');
+            }
+
+            if (taskId) {
+                updateUploadTask(taskId, {
+                    status: 'done',
+                    progress: 100,
+                    error: '',
+                    meta: buildUploadMeta(file.size, file.size, startedAt)
+                });
             }
 
             return {
@@ -2212,16 +2403,25 @@
 
             setBatchUploadingState(true);
             setUploadProgress(`准备上传 ${validFiles.length} 个文件...`, 0, true);
+            createUploadTasks(validFiles);
 
             const failedFiles = [];
 
             try {
                 for (let i = 0; i < validFiles.length; i++) {
                     const file = validFiles[i];
+                    const task = uploadTasks[i];
+                    const taskId = task ? task.id : null;
                     try {
-                        const uploadedFile = await uploadSingleFileResumable(file, i, validFiles.length);
+                        const uploadedFile = await uploadSingleFileResumable(file, i, validFiles.length, taskId);
                         await sendUploadedFileMessage(uploadedFile);
                     } catch (err) {
+                        if (taskId) {
+                            updateUploadTask(taskId, {
+                                status: 'error',
+                                error: err.message || '上传失败'
+                            });
+                        }
                         failedFiles.push({
                             file,
                             message: `${getDisplayFileName(file)}: ${err.message}`
@@ -2244,7 +2444,10 @@
                 updateConnectionStatus(false);
             } finally {
                 setBatchUploadingState(false);
-                window.setTimeout(() => setUploadProgress('', 0, false), 1200);
+                const hasFailures = uploadTasks.some(task => task.status === 'error');
+                if (!hasFailures) {
+                    window.setTimeout(() => setUploadProgress('', 0, false), 1800);
+                }
                 document.getElementById('chatInput').focus();
             }
         }
@@ -2264,6 +2467,12 @@
                 link.getAttribute('data-download-url'),
                 link.getAttribute('data-download-name')
             );
+        });
+        document.getElementById('uploadTaskList').addEventListener('click', (e) => {
+            const retryButton = e.target.closest('[data-upload-retry-id]');
+            if (!retryButton) return;
+            const taskId = Number(retryButton.getAttribute('data-upload-retry-id'));
+            retryUploadTask(taskId);
         });
         
         document.getElementById('chatInput').addEventListener('keypress', (e) => {

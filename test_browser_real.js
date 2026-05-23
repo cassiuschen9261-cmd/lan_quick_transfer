@@ -277,6 +277,7 @@ async function main() {
             mimeType: 'text/plain',
             buffer: Buffer.from(`browser-upload-${testMarker}`, 'utf8')
         });
+        await clientA.page.waitForSelector('.upload-task-item');
 
         await Promise.all([
             waitForPageText(clientA.page, '#messages', uploadedFileName, 15000),
@@ -313,6 +314,7 @@ async function main() {
             qrCode: 'ok',
             storagePolicyReload: 'ok',
             realUpload: 'ok',
+            uploadTaskList: 'ok',
             trackedDownload: 'ok',
             clearFilesSync: 'ok'
         };
