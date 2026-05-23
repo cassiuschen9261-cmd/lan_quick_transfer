@@ -672,11 +672,38 @@
             color: var(--text-muted);
             white-space: nowrap;
         }
+        .download-item-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            margin-top: 10px;
+        }
+        .download-action-btn {
+            border: 1px solid var(--border);
+            background: white;
+            color: var(--text-main);
+            border-radius: 999px;
+            padding: 5px 10px;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+        .download-action-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        .download-action-btn.danger:hover {
+            border-color: #dc2626;
+            color: #dc2626;
+        }
         .download-item.error .download-item-state {
             color: #dc2626;
         }
         .download-item.done .download-item-state {
             color: #16a34a;
+        }
+        .download-item.paused .download-item-state {
+            color: #f59e0b;
         }
 
         /* 附件和图片样式 */
@@ -1961,7 +1988,9 @@
                     ? 'download-item error'
                     : task.status === 'done'
                         ? 'download-item done'
-                        : 'download-item';
+                        : task.status === 'paused'
+                            ? 'download-item paused'
+                            : 'download-item';
                 const percentText = task.totalBytes
                     ? `${Math.min(100, Math.max(0, task.progress || 0)).toFixed(1)}%`
                     : '下载中';
@@ -1972,10 +2001,14 @@
                     ? '已完成'
                     : task.status === 'error'
                         ? (task.error || '下载失败')
-                        : percentText;
+                        : task.status === 'paused'
+                            ? '已暂停'
+                            : percentText;
+                const canPause = task.status === 'downloading';
+                const canResume = task.status === 'paused' || task.status === 'error';
 
                 return `
-                    <div class="${itemClass}">
+                    <div class="${itemClass}" data-download-task-id="${escapeAttribute(task.id)}">
                         <div class="download-item-top">
                             <div>
                                 <div class="download-item-name">${escapeHtml(task.fileName)}</div>
@@ -1985,6 +2018,11 @@
                         </div>
                         <div class="upload-progress-track">
                             <div class="upload-progress-fill" style="width: ${Math.min(100, Math.max(0, task.progress || 0))}%"></div>
+                        </div>
+                        <div class="download-item-actions">
+                            ${canPause ? `<button class="download-action-btn" data-download-action="pause" data-download-task-id="${escapeAttribute(task.id)}">暂停</button>` : ''}
+                            ${canResume ? `<button class="download-action-btn" data-download-action="resume" data-download-task-id="${escapeAttribute(task.id)}">继续下载</button>` : ''}
+                            <button class="download-action-btn danger" data-download-action="delete" data-download-task-id="${escapeAttribute(task.id)}">删除</button>
                         </div>
                     </div>
                 `;
@@ -1998,9 +2036,16 @@
 
         function removeDownloadTaskLater(taskId, delayMs) {
             window.setTimeout(() => {
-                downloadTasks = downloadTasks.filter(task => task.id !== taskId);
-                renderDownloadTasks();
+                const task = getDownloadTaskById(taskId);
+                if (task && task.status === 'done') {
+                    downloadTasks = downloadTasks.filter(item => item.id !== taskId);
+                    renderDownloadTasks();
+                }
             }, delayMs);
+        }
+
+        function getDownloadTaskById(taskId) {
+            return downloadTasks.find(task => task.id === taskId);
         }
 
         function triggerBrowserDownload(blob, fileName) {
@@ -2024,13 +2069,165 @@
             document.body.removeChild(anchor);
         }
 
+        function parseContentRangeTotal(value) {
+            const match = String(value || '').match(/\/(\d+)$/);
+            return match ? Number(match[1]) || 0 : 0;
+        }
+
+        function startDownloadRequest(taskId) {
+            const task = getDownloadTaskById(taskId);
+            if (!task || task.status === 'done') return;
+
+            const controller = new AbortController();
+            const requestStartBytes = task.loadedBytes || 0;
+            const requestStartedAt = Date.now();
+            const headers = { 'X-Client-Name': localClientName };
+            if (requestStartBytes > 0) {
+                headers.Range = `bytes=${requestStartBytes}-`;
+            }
+
+            updateDownloadTask(taskId, {
+                controller,
+                status: 'downloading',
+                error: '',
+                speed: 0,
+                remainingSeconds: null
+            });
+
+            (async () => {
+                try {
+                    const response = await fetch(task.url, {
+                        method: 'GET',
+                        headers,
+                        credentials: 'same-origin',
+                        signal: controller.signal
+                    });
+                    let taskNow = getDownloadTaskById(taskId);
+                    if (!taskNow || taskNow.controller !== controller) return;
+                    if (!response.ok) {
+                        throw new Error(`下载失败 (${response.status})`);
+                    }
+
+                    let chunks = Array.isArray(taskNow.chunks) ? taskNow.chunks : [];
+                    let loadedBytes = requestStartBytes;
+                    if (requestStartBytes > 0 && response.status === 200) {
+                        chunks = [];
+                        loadedBytes = 0;
+                    }
+
+                    const contentRangeTotal = parseContentRangeTotal(response.headers.get('Content-Range'));
+                    const contentLength = Number(response.headers.get('Content-Length')) || 0;
+                    const totalBytes = contentRangeTotal || (contentLength ? loadedBytes + contentLength : taskNow.totalBytes || 0);
+                    const contentType = response.headers.get('Content-Type') || taskNow.contentType || 'application/octet-stream';
+
+                    updateDownloadTask(taskId, {
+                        chunks,
+                        loadedBytes,
+                        totalBytes,
+                        contentType,
+                        progress: totalBytes ? (loadedBytes / totalBytes) * 100 : 0
+                    });
+
+                    if (!response.body) {
+                        const blob = await response.blob();
+                        chunks.push(blob);
+                        loadedBytes += blob.size;
+                    } else {
+                        const reader = response.body.getReader();
+                        while (true) {
+                            const result = await reader.read();
+                            taskNow = getDownloadTaskById(taskId);
+                            if (!taskNow || taskNow.controller !== controller) return;
+                            if (result.done) break;
+                            const chunk = result.value;
+                            chunks.push(chunk);
+                            loadedBytes += chunk.byteLength || chunk.size || 0;
+                            const elapsedSeconds = Math.max(0.2, (Date.now() - requestStartedAt) / 1000);
+                            const speed = Math.max(0, (loadedBytes - requestStartBytes) / elapsedSeconds);
+                            const progress = totalBytes ? (loadedBytes / totalBytes) * 100 : 0;
+                            const remainingSeconds = totalBytes && speed > 0 ? (totalBytes - loadedBytes) / speed : null;
+
+                            updateDownloadTask(taskId, {
+                                chunks,
+                                loadedBytes,
+                                totalBytes,
+                                progress,
+                                speed,
+                                remainingSeconds
+                            });
+                        }
+                    }
+
+                    taskNow = getDownloadTaskById(taskId);
+                    if (!taskNow || taskNow.controller !== controller) return;
+                    const finalBlob = new Blob(chunks, { type: contentType });
+                    updateDownloadTask(taskId, {
+                        chunks,
+                        controller: null,
+                        loadedBytes: finalBlob.size,
+                        totalBytes: finalBlob.size,
+                        progress: 100,
+                        speed: 0,
+                        remainingSeconds: 0,
+                        status: 'done'
+                    });
+                    triggerBrowserDownload(finalBlob, taskNow.fileName);
+                    removeDownloadTaskLater(taskId, 6000);
+                } catch (err) {
+                    const taskNow = getDownloadTaskById(taskId);
+                    if (!taskNow || taskNow.controller !== controller || taskNow.status === 'deleted') return;
+                    if (err.name === 'AbortError' || taskNow.status === 'paused') {
+                        updateDownloadTask(taskId, {
+                            controller: null,
+                            status: 'paused',
+                            speed: 0,
+                            remainingSeconds: null
+                        });
+                        return;
+                    }
+                    updateDownloadTask(taskId, {
+                        controller: null,
+                        status: 'error',
+                        error: err.message || '网络错误',
+                        speed: 0,
+                        remainingSeconds: null
+                    });
+                }
+            })();
+        }
+
+        function pauseDownloadTask(taskId) {
+            const task = getDownloadTaskById(taskId);
+            if (!task || task.status !== 'downloading') return;
+            updateDownloadTask(taskId, { status: 'paused', speed: 0, remainingSeconds: null });
+            if (task.controller) {
+                task.controller.abort();
+            }
+        }
+
+        function resumeDownloadTask(taskId) {
+            const task = getDownloadTaskById(taskId);
+            if (!task || (task.status !== 'paused' && task.status !== 'error')) return;
+            startDownloadRequest(taskId);
+        }
+
+        function deleteDownloadTask(taskId) {
+            const task = getDownloadTaskById(taskId);
+            if (task && task.controller) {
+                updateDownloadTask(taskId, { status: 'deleted' });
+                task.controller.abort();
+            }
+            downloadTasks = downloadTasks.filter(item => item.id !== taskId);
+            renderDownloadTasks();
+        }
+
         function startTrackedDownload(url, fileName) {
             if (!url) return;
 
             const taskId = `download_${++downloadTaskId}`;
-            const startedAt = Date.now();
             downloadTasks.unshift({
                 id: taskId,
+                url,
                 fileName: fileName || '未命名文件',
                 loadedBytes: 0,
                 totalBytes: 0,
@@ -2038,75 +2235,13 @@
                 speed: 0,
                 remainingSeconds: null,
                 status: 'downloading',
-                error: ''
+                error: '',
+                chunks: [],
+                controller: null,
+                contentType: ''
             });
             renderDownloadTasks();
-
-            const xhr = new XMLHttpRequest();
-            xhr.open('GET', url, true);
-            xhr.responseType = 'blob';
-            xhr.withCredentials = true;
-            xhr.setRequestHeader('X-Client-Name', localClientName);
-
-            xhr.onprogress = function(event) {
-                const loadedBytes = event.loaded || 0;
-                const totalBytes = event.lengthComputable ? event.total : 0;
-                const elapsedSeconds = Math.max(0.2, (Date.now() - startedAt) / 1000);
-                const speed = loadedBytes / elapsedSeconds;
-                const progress = totalBytes ? (loadedBytes / totalBytes) * 100 : 0;
-                const remainingSeconds = totalBytes && speed > 0 ? (totalBytes - loadedBytes) / speed : null;
-
-                updateDownloadTask(taskId, {
-                    loadedBytes,
-                    totalBytes,
-                    progress,
-                    speed,
-                    remainingSeconds
-                });
-            };
-
-            xhr.onload = function() {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    const blob = xhr.response;
-                    const finalSize = blob && typeof blob.size === 'number' ? blob.size : 0;
-                    updateDownloadTask(taskId, {
-                        loadedBytes: finalSize,
-                        totalBytes: finalSize,
-                        progress: 100,
-                        speed: 0,
-                        remainingSeconds: 0,
-                        status: 'done'
-                    });
-                    triggerBrowserDownload(blob, fileName);
-                    removeDownloadTaskLater(taskId, 6000);
-                } else {
-                    updateDownloadTask(taskId, {
-                        status: 'error',
-                        error: `下载失败 (${xhr.status})`
-                    });
-                    fallbackDirectDownload(url, fileName);
-                    removeDownloadTaskLater(taskId, 10000);
-                }
-            };
-
-            xhr.onerror = function() {
-                updateDownloadTask(taskId, {
-                    status: 'error',
-                    error: '网络错误'
-                });
-                fallbackDirectDownload(url, fileName);
-                removeDownloadTaskLater(taskId, 10000);
-            };
-
-            xhr.onabort = function() {
-                updateDownloadTask(taskId, {
-                    status: 'error',
-                    error: '已取消'
-                });
-                removeDownloadTaskLater(taskId, 6000);
-            };
-
-            xhr.send();
+            startDownloadRequest(taskId);
         }
 
         function setBatchUploadingState(uploading) {
@@ -2473,6 +2608,19 @@
             if (!retryButton) return;
             const taskId = Number(retryButton.getAttribute('data-upload-retry-id'));
             retryUploadTask(taskId);
+        });
+        document.getElementById('downloadList').addEventListener('click', (e) => {
+            const actionButton = e.target.closest('[data-download-action]');
+            if (!actionButton) return;
+            const action = actionButton.getAttribute('data-download-action');
+            const taskId = actionButton.getAttribute('data-download-task-id');
+            if (action === 'pause') {
+                pauseDownloadTask(taskId);
+            } else if (action === 'resume') {
+                resumeDownloadTask(taskId);
+            } else if (action === 'delete') {
+                deleteDownloadTask(taskId);
+            }
         });
         
         document.getElementById('chatInput').addEventListener('keypress', (e) => {

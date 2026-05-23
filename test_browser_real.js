@@ -296,6 +296,62 @@ async function main() {
             uploadedFileName,
             { timeout: 10000 }
         );
+        await clientB.page.waitForSelector('[data-download-action="delete"]', { timeout: 10000 });
+        const initialDownloadActionLabels = await clientB.page.$$eval('[data-download-action]', buttons => buttons.map(button => button.textContent.trim()));
+        if (!initialDownloadActionLabels.includes('删除')) {
+            throw new Error('Download delete action was not rendered.');
+        }
+        const simulatedDownloadActions = await clientB.page.evaluate(() => {
+            const pausedId = 'test_paused_download_task';
+            const downloadingId = 'test_downloading_download_task';
+            downloadTasks.unshift({
+                id: pausedId,
+                url: '/api/not-found',
+                fileName: 'simulated-paused-download.txt',
+                loadedBytes: 128,
+                totalBytes: 256,
+                progress: 50,
+                speed: 0,
+                remainingSeconds: null,
+                status: 'paused',
+                error: '',
+                chunks: [],
+                controller: null,
+                contentType: ''
+            });
+            downloadTasks.unshift({
+                id: downloadingId,
+                url: '/api/not-found',
+                fileName: 'simulated-downloading-download.txt',
+                loadedBytes: 0,
+                totalBytes: 256,
+                progress: 0,
+                speed: 0,
+                remainingSeconds: null,
+                status: 'downloading',
+                error: '',
+                chunks: [],
+                controller: new AbortController(),
+                contentType: ''
+            });
+            renderDownloadTasks();
+            const labels = Array.from(document.querySelectorAll('[data-download-action]')).map(button => button.textContent.trim());
+            deleteDownloadTask(pausedId);
+            deleteDownloadTask(downloadingId);
+            return labels;
+        });
+        if (!simulatedDownloadActions.includes('暂停') || !simulatedDownloadActions.includes('继续下载') || !simulatedDownloadActions.includes('删除')) {
+            throw new Error('Download pause/resume/delete actions were not rendered.');
+        }
+        await clientB.page.locator('[data-download-action="delete"]').first().click();
+        await clientB.page.waitForFunction(
+            (name) => {
+                const list = document.getElementById('downloadList');
+                return list && !list.textContent.includes(name);
+            },
+            uploadedFileName,
+            { timeout: 10000 }
+        );
 
         await clientA.page.click('#btnClearFiles');
         await waitForDialogMessage(clientA.dialogs, message => message.includes('已清理'));
@@ -316,6 +372,7 @@ async function main() {
             realUpload: 'ok',
             uploadTaskList: 'ok',
             trackedDownload: 'ok',
+            downloadActions: 'ok',
             clearFilesSync: 'ok'
         };
 

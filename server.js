@@ -1400,14 +1400,56 @@ app.get('/api/chat/download/:filename', (req, res) => {
     }
 
     const downloadName = sanitizeDownloadName(req.query.name, fileName);
-    res.download(filePath, downloadName, (err) => {
-        if (err) {
-            console.error("Download error:", err);
-            if (!res.headersSent) {
-                res.status(500).end();
-            }
+    const stat = fs.statSync(filePath);
+    const totalSize = stat.size;
+    const encodedName = encodeURIComponent(downloadName).replace(/['()]/g, value => `%${value.charCodeAt(0).toString(16).toUpperCase()}`);
+    const asciiName = downloadName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_');
+    const contentDisposition = `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`;
+    const baseHeaders = {
+        'Accept-Ranges': 'bytes',
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': contentDisposition
+    };
+    const range = req.headers.range;
+
+    if (range) {
+        const match = String(range).match(/^bytes=(\d*)-(\d*)$/);
+        if (!match) {
+            return res.status(416).set({
+                ...baseHeaders,
+                'Content-Range': `bytes */${totalSize}`
+            }).end();
         }
+
+        let start = match[1] ? Number(match[1]) : 0;
+        let end = match[2] ? Number(match[2]) : totalSize - 1;
+        if (!match[1] && match[2]) {
+            const suffixLength = Number(match[2]);
+            start = Math.max(0, totalSize - suffixLength);
+            end = totalSize - 1;
+        }
+        if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start || start >= totalSize) {
+            return res.status(416).set({
+                ...baseHeaders,
+                'Content-Range': `bytes */${totalSize}`
+            }).end();
+        }
+        end = Math.min(end, totalSize - 1);
+
+        res.writeHead(206, {
+            ...baseHeaders,
+            'Content-Length': end - start + 1,
+            'Content-Range': `bytes ${start}-${end}/${totalSize}`
+        });
+        fs.createReadStream(filePath, { start, end }).pipe(res);
+        return;
+    }
+
+    res.writeHead(200, {
+        ...baseHeaders,
+        'Content-Length': totalSize
     });
+    fs.createReadStream(filePath).pipe(res);
 });
 
 app.get('/api/events', (req, res) => {
