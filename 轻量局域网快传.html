@@ -770,6 +770,7 @@
             </div>
             <div class="modal-actions">
                 <button class="btn-cancel" id="btnCloseConnect">关闭</button>
+                <button class="btn-cancel" id="btnCopyAllConnect">复制全部地址</button>
                 <button class="btn-save" id="btnRefreshConnect">刷新连接信息</button>
             </div>
         </div>
@@ -883,6 +884,7 @@
         let downloadTaskId = 0;
         let downloadTasks = [];
         let currentQuickShareUrl = '';
+        let lastConnectUrls = [];
         const MAX_FILE_SIZE = 1024 * 1024 * 1024 * 1024 * 1024; // 1PB, effectively unlimited
         const DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024;
         const MAX_UPLOAD_CHUNK_RETRIES = 3;
@@ -991,6 +993,9 @@
         });
         document.getElementById('btnRefreshConnect').addEventListener('click', () => {
             loadServerInfo();
+        });
+        document.getElementById('btnCopyAllConnect').addEventListener('click', () => {
+            copyConnectUrls();
         });
         document.getElementById('btnCopyQuickShare').addEventListener('click', () => {
             copyText(currentQuickShareUrl);
@@ -1140,6 +1145,15 @@
             fallbackCopyText(value);
         }
 
+        function copyConnectUrls() {
+            const urls = lastConnectUrls.length ? lastConnectUrls : [currentQuickShareUrl].filter(Boolean);
+            if (!urls.length) {
+                alert('暂无可复制的连接地址');
+                return;
+            }
+            copyText(urls.join('\n'));
+        }
+
         function fallbackCopyText(value) {
             const input = document.createElement('textarea');
             input.value = value;
@@ -1202,6 +1216,7 @@
             }
 
             const urls = Array.isArray(serverInfo.urls) ? serverInfo.urls : [];
+            lastConnectUrls = urls;
             if (!urls.length) {
                 urlContainer.innerHTML = '<div class="empty-state">没有可用连接地址</div>';
             } else {
@@ -2221,14 +2236,20 @@
                         const uploadedFile = await uploadSingleFileResumable(file, i, validFiles.length);
                         await sendUploadedFileMessage(uploadedFile);
                     } catch (err) {
-                        failedFiles.push(`${getDisplayFileName(file)}: ${err.message}`);
+                        failedFiles.push({
+                            file,
+                            message: `${getDisplayFileName(file)}: ${err.message}`
+                        });
                     }
                 }
 
                 setUploadProgress('上传完成', 100, true);
 
                 if (failedFiles.length) {
-                    alert(`上传完成，但有 ${failedFiles.length} 个文件失败：\n${failedFiles.join('\n')}`);
+                    const shouldRetry = confirm(`上传完成，但有 ${failedFiles.length} 个文件失败：\n${failedFiles.map(item => item.message).join('\n')}\n\n是否立即重试失败文件？`);
+                    if (shouldRetry) {
+                        window.setTimeout(() => uploadFiles(failedFiles.map(item => item.file)), 200);
+                    }
                 } else if (validFiles.length > 1) {
                     alert(`已完成 ${validFiles.length} 个文件的上传`);
                 }
