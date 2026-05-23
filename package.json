@@ -1,0 +1,32 @@
+{
+  "name": "lan_quick_transfer",
+  "version": "1.0.0",
+  "description": "Standalone LAN chat and file transfer tool",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\run_regression_tests.ps1 -Target all",
+    "test:smoke": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\run_regression_tests.ps1 -Target smoke",
+    "test:browser": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\run_regression_tests.ps1 -Target browser",
+    "git:push": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\git_auto_push.ps1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "lan",
+    "chat",
+    "transfer"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "multer": "^2.0.2"
+  },
+  "devDependencies": {
+    "jsdom": "^22.1.0",
+    "playwright-core": "^1.60.0"
+  }
+}

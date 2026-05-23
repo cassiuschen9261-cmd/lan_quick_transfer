@@ -1,0 +1,380 @@
+<html>
+<head>
+    <title>LAN Quick Transfer Status</title>
+    <hta:application
+        id="lanQuickTransferStatus"
+        applicationname="LAN Quick Transfer Status"
+        border="thin"
+        caption="yes"
+        maximizebutton="no"
+        minimizebutton="yes"
+        showintaskbar="yes"
+        singleinstance="yes"
+        sysmenu="yes"
+        windowstate="normal"
+    />
+    <meta http-equiv="x-ua-compatible" content="IE=9" />
+    <style>
+        body {
+            font-family: Segoe UI, Arial, sans-serif;
+            background: #f5f7fb;
+            color: #1f2937;
+            margin: 0;
+            padding: 16px;
+        }
+        .card {
+            background: #ffffff;
+            border: 1px solid #dbe3f0;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+        }
+        h2 {
+            margin: 0 0 14px 0;
+            font-size: 20px;
+        }
+        .row {
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+        .label {
+            display: inline-block;
+            width: 110px;
+            color: #475569;
+        }
+        .value {
+            color: #0f172a;
+            word-break: break-all;
+        }
+        .url-list {
+            margin: 8px 0 0 0;
+            padding-left: 18px;
+        }
+        .url-list li {
+            margin-bottom: 4px;
+        }
+        .edit-box {
+            margin: 14px 0 6px 0;
+            padding: 12px;
+            border: 1px solid #dbe3f0;
+            border-radius: 10px;
+            background: #f8fbff;
+        }
+        .edit-title {
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #1e3a8a;
+        }
+        .field {
+            margin-bottom: 10px;
+        }
+        .field label {
+            display: block;
+            margin-bottom: 4px;
+            color: #475569;
+            font-size: 12px;
+        }
+        .field input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            box-sizing: border-box;
+            background: #ffffff;
+        }
+        .tip {
+            color: #64748b;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+        .hint {
+            color: #64748b;
+            font-size: 12px;
+            margin-top: 12px;
+        }
+        .actions {
+            margin-top: 16px;
+        }
+        button {
+            margin: 0 8px 8px 0;
+            padding: 8px 14px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: #ffffff;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #eff6ff;
+        }
+        .primary {
+            background: #2563eb;
+            color: #ffffff;
+            border-color: #2563eb;
+        }
+        .primary:hover {
+            background: #1d4ed8;
+        }
+    </style>
+    <script language="javascript">
+        var shell = new ActiveXObject("WScript.Shell");
+        var fso = new ActiveXObject("Scripting.FileSystemObject");
+
+        function decodePath(pathname) {
+            try {
+                return decodeURIComponent(pathname);
+            } catch (e) {
+                return unescape(pathname);
+            }
+        }
+
+        function getProjectRoot() {
+            var current = decodePath(window.location.pathname).replace(/\//g, "\\");
+            if (current.charAt(0) === "\\") {
+                current = current.substring(1);
+            }
+            return current.replace(/\\scripts\\server_status\.hta$/i, "");
+        }
+
+        function readText(filePath) {
+            if (!fso.FileExists(filePath)) {
+                return null;
+            }
+
+            var stream = fso.OpenTextFile(filePath, 1, false);
+            var text = stream.ReadAll();
+            stream.Close();
+            return text.replace(/^\uFEFF/, "");
+        }
+
+        function parseJson(text) {
+            if (!text) {
+                return null;
+            }
+
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                return eval("(" + text + ")");
+            }
+        }
+
+        function runHidden(command) {
+            shell.Run(command, 0, false);
+        }
+
+        function runVisible(command, waitForExit) {
+            shell.Run(command, 1, waitForExit ? true : false);
+        }
+
+        function isValidHost(host) {
+            if (!host) {
+                return false;
+            }
+
+            var value = String(host).replace(/^\s+|\s+$/g, "");
+            if (value === "0.0.0.0" || value === "127.0.0.1" || value === "localhost") {
+                return true;
+            }
+
+            return /^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)){3}$/.test(value);
+        }
+
+        function isValidPort(port) {
+            if (!/^\d+$/.test(String(port))) {
+                return false;
+            }
+
+            var portNum = parseInt(port, 10);
+            return portNum >= 1 && portNum <= 65535;
+        }
+
+        function writeConfig(host, port) {
+            var root = getProjectRoot();
+            var filePath = root + "\\data\\server-config.json";
+            var folder = root + "\\data";
+            var existing = parseJson(readText(filePath)) || {};
+            if (!fso.FolderExists(folder)) {
+                fso.CreateFolder(folder);
+            }
+
+            var payload = {
+                host: host,
+                port: port
+            };
+
+            if (existing.storage) {
+                payload.storage = existing.storage;
+            }
+
+            var content = JSON.stringify(payload, null, 2);
+            var file = fso.CreateTextFile(filePath, true, false);
+            file.Write(content);
+            file.Close();
+        }
+
+        function getFallbackUrl(config) {
+            var host = "127.0.0.1";
+            var port = "18082";
+
+            if (config && config.port) {
+                port = String(config.port);
+            }
+
+            if (config && config.host) {
+                var bindHost = String(config.host);
+                if (bindHost === "localhost" || bindHost === "127.0.0.1") {
+                    host = bindHost;
+                } else if (bindHost !== "0.0.0.0") {
+                    host = bindHost;
+                }
+            }
+
+            return "http://" + host + ":" + port;
+        }
+
+        function setText(id, value) {
+            document.getElementById(id).innerText = value;
+        }
+
+        function refreshStatus() {
+            var root = getProjectRoot();
+            var config = parseJson(readText(root + "\\data\\server-config.json"));
+            var status = parseJson(readText(root + "\\data\\server-status.json"));
+
+            setText("configHost", config && config.host ? config.host : "0.0.0.0");
+            setText("configPort", config && config.port ? config.port : "18082");
+            document.getElementById("editHost").value = config && config.host ? config.host : "0.0.0.0";
+            document.getElementById("editPort").value = config && config.port ? config.port : "18082";
+
+            if (!status) {
+                setText("runningState", "stopped");
+                setText("processId", "-");
+                setText("startedAt", "-");
+                document.getElementById("urls").innerHTML = "<li>Not running</li>";
+                return;
+            }
+
+            setText("runningState", "running");
+            setText("processId", status.pid ? status.pid : "-");
+            setText("startedAt", status.startedAt ? status.startedAt : "-");
+
+            var urls = document.getElementById("urls");
+            urls.innerHTML = "";
+            if (status.urls && status.urls.length) {
+                for (var i = 0; i < status.urls.length; i++) {
+                    var li = document.createElement("li");
+                    li.innerText = status.urls[i];
+                    urls.appendChild(li);
+                }
+            } else {
+                var fallback = document.createElement("li");
+                fallback.innerText = getFallbackUrl(config);
+                urls.appendChild(fallback);
+            }
+        }
+
+        function openUrl() {
+            var root = getProjectRoot();
+            var config = parseJson(readText(root + "\\data\\server-config.json"));
+            var status = parseJson(readText(root + "\\data\\server-status.json"));
+            var url = status && status.urls && status.urls.length ? status.urls[0] : getFallbackUrl(config);
+            shell.Run(url, 1, false);
+        }
+
+        function stopServer() {
+            var root = getProjectRoot();
+            runHidden('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + root + '\\scripts\\stop_server.ps1"');
+            window.setTimeout(refreshStatus, 1200);
+        }
+
+        function startServer() {
+            var root = getProjectRoot();
+            runHidden('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + root + '\\scripts\\start_server_hidden.ps1" node');
+            window.setTimeout(refreshStatus, 1800);
+        }
+
+        function saveBindConfig(restartAfterSave) {
+            var root = getProjectRoot();
+            var host = document.getElementById("editHost").value.replace(/^\s+|\s+$/g, "");
+            var port = document.getElementById("editPort").value.replace(/^\s+|\s+$/g, "");
+
+            if (!isValidHost(host)) {
+                alert("IP / Host 无效。可用示例：0.0.0.0、127.0.0.1、localhost、192.168.1.8");
+                return;
+            }
+
+            if (!isValidPort(port)) {
+                alert("端口无效。请输入 1-65535。18080 和 18081 会自动改为其他端口。");
+                return;
+            }
+
+            if (port === "18080" || port === "18081") {
+                port = "18082";
+                document.getElementById("editPort").value = port;
+            }
+
+            writeConfig(host, parseInt(port, 10));
+            refreshStatus();
+
+            if (restartAfterSave) {
+                runVisible('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + root + '\\scripts\\stop_server.ps1"', true);
+                runVisible('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + root + '\\scripts\\start_server_hidden.ps1" node', true);
+                window.setTimeout(refreshStatus, 1200);
+                alert("IP + 端口已保存，并已尝试重启服务。");
+                return;
+            }
+
+            alert("IP + 端口已保存。若服务正在运行，请手动重启或点击“保存并重启服务”。");
+        }
+
+        function openLauncher() {
+            var root = getProjectRoot();
+            shell.Run('"' + root + '\\start_server.bat"', 1, false);
+        }
+
+        window.onload = function() {
+            refreshStatus();
+            window.setInterval(refreshStatus, 3000);
+            window.resizeTo(520, 420);
+        };
+    </script>
+</head>
+<body>
+    <div class="card">
+        <h2>LAN Quick Transfer Status</h2>
+        <div class="row"><span class="label">Configured Host</span><span class="value" id="configHost">-</span></div>
+        <div class="row"><span class="label">Configured Port</span><span class="value" id="configPort">-</span></div>
+        <div class="row"><span class="label">Running State</span><span class="value" id="runningState">-</span></div>
+        <div class="row"><span class="label">Process ID</span><span class="value" id="processId">-</span></div>
+        <div class="row"><span class="label">Started At</span><span class="value" id="startedAt">-</span></div>
+        <div class="row">
+            <span class="label">URLs</span>
+            <ul class="url-list" id="urls">
+                <li>Loading...</li>
+            </ul>
+        </div>
+        <div class="edit-box">
+            <div class="edit-title">修改 IP + 端口</div>
+            <div class="field">
+                <label for="editHost">绑定 IP / Host</label>
+                <input id="editHost" type="text" value="0.0.0.0">
+            </div>
+            <div class="field">
+                <label for="editPort">端口</label>
+                <input id="editPort" type="text" value="18082">
+            </div>
+            <div class="tip">常用示例：`0.0.0.0` 表示监听所有网卡，`127.0.0.1` 表示仅本机，`192.168.x.x` 表示只绑定某个局域网 IP。端口会自动避开 18080 和 18081。</div>
+        </div>
+        <div class="actions">
+            <button class="primary" onclick="refreshStatus()">Refresh</button>
+            <button class="primary" onclick="startServer()">Start Server</button>
+            <button onclick="saveBindConfig(false)">Save IP+Port</button>
+            <button onclick="saveBindConfig(true)">Save And Restart</button>
+            <button onclick="openUrl()">Open URL</button>
+            <button onclick="stopServer()">Stop Server</button>
+            <button onclick="openLauncher()">Open Launcher</button>
+        </div>
+        <div class="hint">This panel refreshes automatically every 3 seconds.</div>
+    </div>
+</body>
+</html>
