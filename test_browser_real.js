@@ -185,6 +185,10 @@ async function main() {
         const baseUrl = status.urls[0];
         assert(status.port !== 18080 && status.port !== 18081, 'Reserved port was not avoided');
         await waitForHttp(baseUrl);
+        const qrResponse = await fetch(`${baseUrl}/api/qr.svg?text=${encodeURIComponent(baseUrl)}`);
+        assert(qrResponse.ok, 'QR SVG endpoint is not served');
+        const qrBody = await qrResponse.text();
+        assert(qrBody.includes('<svg') && qrBody.includes('<rect'), 'QR SVG endpoint content is invalid');
 
         const launchOptions = getBrowserLaunchOptions();
         browser = await chromium.launch(launchOptions);
@@ -231,6 +235,14 @@ async function main() {
 
         await clientB.page.click('#btnOpenConnect');
         await waitForPageText(clientB.page, '#onlineDeviceList', aliasValue);
+        await clientB.page.waitForFunction(
+            () => {
+                const image = document.getElementById('connectQrImage');
+                return image && image.getAttribute('src') && image.getAttribute('src').includes('/api/qr.svg?text=');
+            },
+            undefined,
+            { timeout: 10000 }
+        );
         await clientA.page.click('#btnCloseDevices');
         await clientB.page.click('#btnCloseConnect');
 
@@ -298,6 +310,7 @@ async function main() {
             realMessageFlow: 'ok',
             clearHistorySync: 'ok',
             aliasSync: 'ok',
+            qrCode: 'ok',
             storagePolicyReload: 'ok',
             realUpload: 'ok',
             trackedDownload: 'ok',

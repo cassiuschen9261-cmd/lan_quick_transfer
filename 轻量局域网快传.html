@@ -873,7 +873,6 @@
         </div>
     </div>
 
-    <script src="qr-generator.min.js"></script>
     <script>
         let currentSession = null;
         let eventSource = null;
@@ -1165,24 +1164,11 @@
         }
 
         function getQrImageUrl(value) {
-            if (!value || typeof qrcode !== 'function') {
+            const baseUrl = getServerUrl();
+            if (!value || !baseUrl) {
                 return '';
             }
-
-            try {
-                const qr = qrcode(0, 'M');
-                qr.addData(value);
-                qr.make();
-                const svg = qr.createSvgTag({
-                    cellSize: 4,
-                    margin: 2,
-                    scalable: true
-                });
-                return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-            } catch (err) {
-                console.error('本地二维码生成失败', err);
-                return '';
-            }
+            return `${baseUrl}/api/qr.svg?text=${encodeURIComponent(value)}`;
         }
 
         function renderConnectInfo() {

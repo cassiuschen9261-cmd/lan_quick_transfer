@@ -45,6 +45,12 @@ const MAX_MESSAGE_LENGTH = 20000;
 const MAX_FILE_NAME_LENGTH = 255;
 const MAX_MIME_TYPE_LENGTH = 120;
 const MAX_RELATIVE_PATH_LENGTH = 1000;
+const QR_VERSION = 4;
+const QR_SIZE = 4 * QR_VERSION + 17;
+const QR_DATA_CODEWORDS = 64;
+const QR_EC_CODEWORDS_PER_BLOCK = 18;
+const QR_BLOCK_COUNT = 2;
+const QR_MAX_BYTES = QR_DATA_CODEWORDS - 2;
 
 // Ensure directories exist
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -767,6 +773,210 @@ function broadcastConnections() {
     });
 }
 
+function gfMultiply(a, b) {
+    let result = 0;
+    while (b > 0) {
+        if (b & 1) result ^= a;
+        a <<= 1;
+        if (a & 0x100) a ^= 0x11d;
+        b >>= 1;
+    }
+    return result;
+}
+
+function rsGenerator(degree) {
+    let poly = [1];
+    let root = 1;
+    for (let i = 0; i < degree; i += 1) {
+        const next = new Array(poly.length + 1).fill(0);
+        for (let j = 0; j < poly.length; j += 1) {
+            next[j] ^= gfMultiply(poly[j], root);
+            next[j + 1] ^= poly[j];
+        }
+        poly = next;
+        root = gfMultiply(root, 2);
+    }
+    return poly;
+}
+
+function rsRemainder(data, degree) {
+    const generator = rsGenerator(degree);
+    const result = new Array(degree).fill(0);
+    for (const value of data) {
+        const factor = value ^ result.shift();
+        result.push(0);
+        for (let i = 0; i < degree; i += 1) {
+            result[i] ^= gfMultiply(generator[i], factor);
+        }
+    }
+    return result;
+}
+
+function pushBits(bits, value, length) {
+    for (let i = length - 1; i >= 0; i -= 1) {
+        bits.push((value >>> i) & 1);
+    }
+}
+
+function buildQrDataCodewords(text) {
+    const bytes = Array.from(Buffer.from(text, 'utf8'));
+    if (bytes.length > QR_MAX_BYTES) {
+        throw new Error(`QR text is too long. Maximum UTF-8 bytes: ${QR_MAX_BYTES}`);
+    }
+
+    const bits = [];
+    pushBits(bits, 0b0100, 4);
+    pushBits(bits, bytes.length, 8);
+    for (const byte of bytes) pushBits(bits, byte, 8);
+    const capacityBits = QR_DATA_CODEWORDS * 8;
+    const terminatorBits = Math.min(4, capacityBits - bits.length);
+    pushBits(bits, 0, terminatorBits);
+    while (bits.length % 8) bits.push(0);
+
+    const data = [];
+    for (let i = 0; i < bits.length; i += 8) {
+        data.push(bits.slice(i, i + 8).reduce((sum, bit) => (sum << 1) | bit, 0));
+    }
+    for (let pad = 0xec; data.length < QR_DATA_CODEWORDS; pad = pad === 0xec ? 0x11 : 0xec) {
+        data.push(pad);
+    }
+    return data;
+}
+
+function buildQrCodewords(text) {
+    const data = buildQrDataCodewords(text);
+    const dataBlocks = [];
+    const ecBlocks = [];
+    const blockSize = QR_DATA_CODEWORDS / QR_BLOCK_COUNT;
+    for (let i = 0; i < QR_BLOCK_COUNT; i += 1) {
+        const block = data.slice(i * blockSize, (i + 1) * blockSize);
+        dataBlocks.push(block);
+        ecBlocks.push(rsRemainder(block, QR_EC_CODEWORDS_PER_BLOCK));
+    }
+
+    const result = [];
+    for (let i = 0; i < blockSize; i += 1) {
+        for (const block of dataBlocks) result.push(block[i]);
+    }
+    for (let i = 0; i < QR_EC_CODEWORDS_PER_BLOCK; i += 1) {
+        for (const block of ecBlocks) result.push(block[i]);
+    }
+    return result;
+}
+
+function createQrMatrix() {
+    return {
+        modules: Array.from({ length: QR_SIZE }, () => new Array(QR_SIZE).fill(false)),
+        reserved: Array.from({ length: QR_SIZE }, () => new Array(QR_SIZE).fill(false))
+    };
+}
+
+function setQrModule(qr, row, col, value, reserve = true) {
+    if (row < 0 || col < 0 || row >= QR_SIZE || col >= QR_SIZE) return;
+    qr.modules[row][col] = !!value;
+    if (reserve) qr.reserved[row][col] = true;
+}
+
+function placeFinder(qr, row, col) {
+    for (let r = -1; r <= 7; r += 1) {
+        for (let c = -1; c <= 7; c += 1) {
+            const rr = row + r;
+            const cc = col + c;
+            const dark = r >= 0 && r <= 6 && c >= 0 && c <= 6 &&
+                (r === 0 || r === 6 || c === 0 || c === 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4));
+            setQrModule(qr, rr, cc, dark);
+        }
+    }
+}
+
+function placeAlignment(qr, row, col) {
+    for (let r = -2; r <= 2; r += 1) {
+        for (let c = -2; c <= 2; c += 1) {
+            const dark = Math.max(Math.abs(r), Math.abs(c)) !== 1;
+            setQrModule(qr, row + r, col + c, dark);
+        }
+    }
+}
+
+function placeQrPatterns(qr) {
+    placeFinder(qr, 0, 0);
+    placeFinder(qr, 0, QR_SIZE - 7);
+    placeFinder(qr, QR_SIZE - 7, 0);
+    for (let i = 8; i < QR_SIZE - 8; i += 1) {
+        setQrModule(qr, 6, i, i % 2 === 0);
+        setQrModule(qr, i, 6, i % 2 === 0);
+    }
+    placeAlignment(qr, 26, 26);
+    setQrModule(qr, QR_SIZE - 8, 8, true);
+    for (let i = 0; i < 9; i += 1) {
+        setQrModule(qr, 8, i, false);
+        setQrModule(qr, i, 8, false);
+        setQrModule(qr, 8, QR_SIZE - 1 - i, false);
+        setQrModule(qr, QR_SIZE - 1 - i, 8, false);
+    }
+}
+
+function getFormatBits() {
+    let data = 0;
+    let value = data << 10;
+    const generator = 0x537;
+    for (let i = 14; i >= 10; i -= 1) {
+        if ((value >>> i) & 1) value ^= generator << (i - 10);
+    }
+    return ((data << 10) | value) ^ 0x5412;
+}
+
+function placeFormatBits(qr) {
+    const bits = getFormatBits();
+    const first = [[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],[7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8]];
+    const second = [[QR_SIZE-1,8],[QR_SIZE-2,8],[QR_SIZE-3,8],[QR_SIZE-4,8],[QR_SIZE-5,8],[QR_SIZE-6,8],[QR_SIZE-7,8],[8,QR_SIZE-8],[8,QR_SIZE-7],[8,QR_SIZE-6],[8,QR_SIZE-5],[8,QR_SIZE-4],[8,QR_SIZE-3],[8,QR_SIZE-2],[8,QR_SIZE-1]];
+    for (let i = 0; i < 15; i += 1) {
+        const bit = ((bits >>> i) & 1) === 1;
+        setQrModule(qr, first[i][0], first[i][1], bit);
+        setQrModule(qr, second[i][0], second[i][1], bit);
+    }
+}
+
+function placeQrData(qr, codewords) {
+    const bits = [];
+    for (const codeword of codewords) pushBits(bits, codeword, 8);
+    let bitIndex = 0;
+    let upward = true;
+    for (let col = QR_SIZE - 1; col > 0; col -= 2) {
+        if (col === 6) col -= 1;
+        for (let i = 0; i < QR_SIZE; i += 1) {
+            const row = upward ? QR_SIZE - 1 - i : i;
+            for (let offset = 0; offset < 2; offset += 1) {
+                const currentCol = col - offset;
+                if (qr.reserved[row][currentCol]) continue;
+                const rawBit = bitIndex < bits.length ? bits[bitIndex] === 1 : false;
+                const masked = rawBit !== ((row + currentCol) % 2 === 0);
+                setQrModule(qr, row, currentCol, masked, false);
+                bitIndex += 1;
+            }
+        }
+        upward = !upward;
+    }
+}
+
+function createQrSvg(text) {
+    const qr = createQrMatrix();
+    placeQrPatterns(qr);
+    placeQrData(qr, buildQrCodewords(text));
+    placeFormatBits(qr);
+    const margin = 4;
+    const size = QR_SIZE + margin * 2;
+    const rects = [];
+    for (let row = 0; row < QR_SIZE; row += 1) {
+        for (let col = 0; col < QR_SIZE; col += 1) {
+            if (qr.modules[row][col]) {
+                rects.push(`<rect x="${col + margin}" y="${row + margin}" width="1" height="1"/>`);
+            }
+        }
+    }
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><g fill="#000">${rects.join('')}</g></svg>`;
+}
+
 // Config CORS
 app.use(cors({
     origin: true,
@@ -848,6 +1058,19 @@ app.get('/api/server-info', (req, res) => {
         knownDevices: getKnownDevices(),
         onlineDevices: getOnlineDevices()
     });
+});
+
+app.get('/api/qr.svg', (req, res) => {
+    const text = String(req.query.text || '').trim();
+    if (!text) {
+        return res.status(400).type('text/plain').send('Missing text');
+    }
+
+    try {
+        res.type('image/svg+xml').send(createQrSvg(text));
+    } catch (e) {
+        res.status(400).type('text/plain').send(e.message || 'Failed to generate QR code');
+    }
 });
 
 app.get('/api/storage/status', (req, res) => {
