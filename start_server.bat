@@ -25,6 +25,7 @@ if /I "%~1"=="startup-off" goto AUTO_OFF
 if /I "%~1"=="startup-status" goto AUTO_STATUS
 if /I "%~1"=="startup-test" goto TEST_STARTUP_NOW
 if /I "%~1"=="panel" goto OPEN_STATUS_PANEL
+if /I "%~1"=="install-node" goto INSTALL_NODE
 if /I "%~1"=="test" goto RUN_TESTS
 
 :MENU
@@ -44,10 +45,11 @@ echo 9. Disable auto start
 echo 10. Show auto start status
 echo 11. Test auto start now
 echo 12. Open status panel
-echo 13. Run regression tests
-echo 14. Exit
+echo 13. Install Node.js 18+
+echo 14. Run regression tests
+echo 15. Exit
 echo.
-set /p choice="Select 1-14: "
+set /p choice="Select 1-15: "
 
 if "%choice%"=="1" goto START_VISIBLE
 if "%choice%"=="2" goto START_SILENT
@@ -61,8 +63,9 @@ if "%choice%"=="9" goto AUTO_OFF
 if "%choice%"=="10" goto AUTO_STATUS
 if "%choice%"=="11" goto TEST_STARTUP_NOW
 if "%choice%"=="12" goto OPEN_STATUS_PANEL
-if "%choice%"=="13" goto RUN_TESTS
-if "%choice%"=="14" exit /b 0
+if "%choice%"=="13" goto INSTALL_NODE
+if "%choice%"=="14" goto RUN_TESTS
+if "%choice%"=="15" exit /b 0
 
 echo Invalid choice.
 echo.
@@ -94,6 +97,8 @@ goto AFTER_ACTION
 cls
 echo Starting tray background mode...
 echo.
+call :ENSURE_RUNTIME
+if errorlevel 1 goto AFTER_ACTION
 if not exist "start_server_tray.bat" (
     echo start_server_tray.bat was not found.
     goto AFTER_ACTION
@@ -179,6 +184,13 @@ start "" "%MSHTA_EXE%" "scripts\server_status.hta"
 echo Status panel launched.
 goto AFTER_ACTION
 
+:INSTALL_NODE
+cls
+echo Installing Node.js 18+...
+echo.
+call :INSTALL_NODE_RUNTIME
+goto AFTER_ACTION
+
 :RUN_TESTS
 cls
 echo Running regression tests...
@@ -199,16 +211,18 @@ set "RUNTIME="
 set "NPM_CMD="
 set "NODE_MAJOR="
 set "NODE_MAJOR_FILE=%TEMP%\lan_qt_node_major.txt"
+:RESOLVE_RUNTIME
 if exist "%ProgramFiles%\nodejs\node.exe" (
     set "RUNTIME=%ProgramFiles%\nodejs\node.exe"
     if exist "%ProgramFiles%\nodejs\npm.cmd" set "NPM_CMD=%ProgramFiles%\nodejs\npm.cmd"
 ) else (
     where node >nul 2>nul
     if errorlevel 1 (
-        echo Node.js was not found. Please install Node.js first.
+        echo Node.js was not found.
         echo.
-        pause
-        exit /b 1
+        call :INSTALL_NODE_RUNTIME
+        if errorlevel 1 exit /b 1
+        goto RESOLVE_RUNTIME
     )
     set "RUNTIME=node"
     set "NPM_CMD=npm"
@@ -221,16 +235,17 @@ if exist "%NODE_MAJOR_FILE%" del /f /q "%NODE_MAJOR_FILE%" >nul 2>nul
 if not defined NODE_MAJOR (
     echo Failed to detect the Node.js version.
     echo.
-    pause
-    exit /b 1
+    call :INSTALL_NODE_RUNTIME
+    if errorlevel 1 exit /b 1
+    goto RESOLVE_RUNTIME
 )
 
 if %NODE_MAJOR% LSS 18 (
     echo Node.js 18 or later is required. Current major version: %NODE_MAJOR%
-    echo Please upgrade Node.js, then run this launcher again.
     echo.
-    pause
-    exit /b 1
+    call :INSTALL_NODE_RUNTIME
+    if errorlevel 1 exit /b 1
+    goto RESOLVE_RUNTIME
 )
 
 if not exist "node_modules" (
@@ -245,3 +260,36 @@ if not exist "node_modules" (
 )
 
 exit /b 0
+
+:INSTALL_NODE_RUNTIME
+if not exist "scripts\install_node18.ps1" (
+    echo Missing installer script: scripts\install_node18.ps1
+    echo.
+    exit /b 1
+)
+echo This will install Node.js 18+ if it is not available.
+echo The installer will first use a local MSI from tools\nodejs if present.
+echo If no local installer is found, it will try winget, then open the official download page if needed.
+echo.
+if not defined NONINTERACTIVE (
+    set /p INSTALL_NODE_CONFIRM="Continue? [Y/N]: "
+    call :CHECK_INSTALL_NODE_CONFIRM
+    if errorlevel 1 exit /b 1
+)
+"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "scripts\install_node18.ps1"
+if errorlevel 1 (
+    echo.
+    echo Node.js 18+ installation was not completed.
+    echo Please install Node.js 18+ manually, then run this launcher again.
+    echo.
+    exit /b 1
+)
+set "RUNTIME="
+set "NPM_CMD="
+set "NODE_MAJOR="
+exit /b 0
+
+:CHECK_INSTALL_NODE_CONFIRM
+if /I "%INSTALL_NODE_CONFIRM%"=="Y" exit /b 0
+echo Node.js installation cancelled.
+exit /b 1
