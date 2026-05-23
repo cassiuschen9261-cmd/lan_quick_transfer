@@ -15,6 +15,7 @@ if /I not "%~1"=="" set "NONINTERACTIVE=1"
 
 if /I "%~1"=="server" goto START_VISIBLE
 if /I "%~1"=="silent" goto START_SILENT
+if /I "%~1"=="tray" goto START_TRAY
 if /I "%~1"=="stop" goto STOP_SERVER
 if /I "%~1"=="status" goto SHOW_STATUS
 if /I "%~1"=="config" goto CHANGE_BIND
@@ -33,33 +34,35 @@ echo LAN Quick Transfer Launcher
 echo =========================================
 echo 1. Start visible console
 echo 2. Start silent background mode
-echo 3. Stop background server
-echo 4. Show server status
-echo 5. Change bind IP and port
-echo 6. Reset bind to 0.0.0.0:auto port ^(18082+^)
-echo 7. Enable auto start ^(silent background^)
-echo 8. Disable auto start
-echo 9. Show auto start status
-echo 10. Test auto start now
-echo 11. Open status panel
-echo 12. Run regression tests
-echo 13. Exit
+echo 3. Start tray background mode
+echo 4. Stop background server
+echo 5. Show server status
+echo 6. Change bind IP and port
+echo 7. Reset bind to 0.0.0.0:auto port ^(18082+^)
+echo 8. Enable auto start ^(silent background^)
+echo 9. Disable auto start
+echo 10. Show auto start status
+echo 11. Test auto start now
+echo 12. Open status panel
+echo 13. Run regression tests
+echo 14. Exit
 echo.
-set /p choice="Select 1-13: "
+set /p choice="Select 1-14: "
 
 if "%choice%"=="1" goto START_VISIBLE
 if "%choice%"=="2" goto START_SILENT
-if "%choice%"=="3" goto STOP_SERVER
-if "%choice%"=="4" goto SHOW_STATUS
-if "%choice%"=="5" goto CHANGE_BIND
-if "%choice%"=="6" goto RESET_BIND
-if "%choice%"=="7" goto AUTO_ON
-if "%choice%"=="8" goto AUTO_OFF
-if "%choice%"=="9" goto AUTO_STATUS
-if "%choice%"=="10" goto TEST_STARTUP_NOW
-if "%choice%"=="11" goto OPEN_STATUS_PANEL
-if "%choice%"=="12" goto RUN_TESTS
-if "%choice%"=="13" exit /b 0
+if "%choice%"=="3" goto START_TRAY
+if "%choice%"=="4" goto STOP_SERVER
+if "%choice%"=="5" goto SHOW_STATUS
+if "%choice%"=="6" goto CHANGE_BIND
+if "%choice%"=="7" goto RESET_BIND
+if "%choice%"=="8" goto AUTO_ON
+if "%choice%"=="9" goto AUTO_OFF
+if "%choice%"=="10" goto AUTO_STATUS
+if "%choice%"=="11" goto TEST_STARTUP_NOW
+if "%choice%"=="12" goto OPEN_STATUS_PANEL
+if "%choice%"=="13" goto RUN_TESTS
+if "%choice%"=="14" exit /b 0
 
 echo Invalid choice.
 echo.
@@ -85,6 +88,18 @@ echo.
 call :ENSURE_RUNTIME
 if errorlevel 1 goto AFTER_ACTION
 "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "scripts\start_server_hidden.ps1" "%RUNTIME%"
+goto AFTER_ACTION
+
+:START_TRAY
+cls
+echo Starting tray background mode...
+echo.
+if not exist "start_server_tray.bat" (
+    echo start_server_tray.bat was not found.
+    goto AFTER_ACTION
+)
+call "start_server_tray.bat"
+echo Tray mode launched. Check the Windows notification area.
 goto AFTER_ACTION
 
 :STOP_SERVER
