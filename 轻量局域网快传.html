@@ -477,6 +477,82 @@
             outline: none;
             font-family: inherit;
         }
+        .expire-select {
+            border: none;
+            background: white;
+            color: var(--text-muted);
+            border-radius: 8px;
+            padding: 8px;
+            font-size: 0.82rem;
+            outline: none;
+            max-width: 132px;
+        }
+        .batch-file-check {
+            margin-right: 8px;
+            transform: translateY(1px);
+        }
+        .file-expire-tip {
+            margin-top: 6px;
+            font-size: 0.76rem;
+            opacity: 0.78;
+        }
+        .filter-bar {
+            display: flex;
+            gap: 8px;
+            padding: 12px 24px;
+            background: white;
+            border-top: 1px solid var(--border);
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .filter-input {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 8px 10px;
+            font-size: 0.86rem;
+            outline: none;
+        }
+        .filter-input:focus {
+            border-color: var(--primary);
+        }
+        .lightbox {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.88);
+            z-index: 3000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .lightbox.active {
+            display: flex;
+        }
+        .lightbox-image {
+            max-width: min(92vw, 1200px);
+            max-height: 78vh;
+            border-radius: 16px;
+            box-shadow: 0 18px 60px rgba(0,0,0,0.35);
+            background: white;
+        }
+        .lightbox-actions {
+            position: absolute;
+            left: 50%;
+            bottom: 26px;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .lightbox-btn {
+            border: 1px solid rgba(255,255,255,0.35);
+            background: rgba(255,255,255,0.14);
+            color: white;
+            border-radius: 999px;
+            padding: 8px 14px;
+            cursor: pointer;
+        }
 
         .upload-btn {
             background: transparent;
@@ -637,6 +713,19 @@
         }
         .download-status.active {
             display: block;
+        }
+        .download-status-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .download-status-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
         }
         .download-list {
             display: flex;
@@ -900,6 +989,7 @@
                 <button class="settings-btn" id="btnOpenConnect">📱 快连</button>
                 <button class="settings-btn" id="btnOpenDevices">🖥️ 设备备注</button>
                 <button class="settings-btn" id="btnOpenStorage">🗄️ 存储管理</button>
+                <button class="settings-btn" id="btnBatchDownload">📦 打包所选</button>
                 <button class="settings-btn danger-btn" id="btnClearHistory">🧹 清空记录</button>
                 <button class="settings-btn danger-btn" id="btnClearFiles">🗑️ 清理文件</button>
                 <button class="settings-btn" id="btnOpenConfig">⚙️ 配置</button>
@@ -912,6 +1002,13 @@
         <div class="quick-share-bar" id="quickShareBar">
             <div>推荐访问地址：<span class="quick-share-url" id="quickShareUrl">正在获取...</span></div>
             <button class="small-btn" id="btnCopyQuickShare">复制地址</button>
+        </div>
+        <div class="filter-bar">
+            <input type="search" id="fileSearchInput" class="filter-input" placeholder="搜索文件名或消息">
+            <input type="search" id="deviceFilterInput" class="filter-input" placeholder="按设备筛选">
+            <input type="date" id="dateFilterInput" class="filter-input">
+            <button class="small-btn" id="btnClearFilters">清除筛选</button>
+            <button class="small-btn" id="btnSendClipboard">发送剪贴板</button>
         </div>
         
         <div class="chat-area">
@@ -928,6 +1025,12 @@
                     <button id="folderBtn" class="folder-btn" title="发送文件夹">📁</button>
                     <input type="file" id="fileInput" style="display: none;" multiple>
                     <input type="file" id="folderInput" style="display: none;" webkitdirectory directory multiple>
+                    <select id="fileExpireSelect" class="expire-select" title="上传文件保留时间">
+                        <option value="never">永久保留</option>
+                        <option value="1h">1 小时后过期</option>
+                        <option value="1d">1 天后过期</option>
+                        <option value="7d">7 天后过期</option>
+                    </select>
                     <input type="text" id="chatInput" class="input-box" placeholder="输入消息，或直接拖拽文件到此处 (Enter 发送)...">
                 </div>
                 <button id="sendBtn" class="send-btn">
@@ -947,9 +1050,27 @@
                 <div class="upload-task-list" id="uploadTaskList"></div>
             </div>
             <div class="download-status" id="downloadStatus">
-                <div class="upload-status-text">下载任务</div>
+                <div class="download-status-header">
+                    <div class="upload-status-text">下载任务</div>
+                    <div class="download-status-actions">
+                        <button class="small-btn" id="btnPauseAllDownloads">全部暂停</button>
+                        <button class="small-btn" id="btnResumeAllDownloads">全部继续</button>
+                        <button class="small-btn" id="btnDeleteAllDownloads">全部删除</button>
+                    </div>
+                </div>
                 <div class="download-list" id="downloadList"></div>
             </div>
+        </div>
+    </div>
+
+    <div class="lightbox" id="imageLightbox">
+        <img class="lightbox-image" id="lightboxImage" alt="图片预览">
+        <div class="lightbox-actions">
+            <button class="lightbox-btn" id="btnLightboxPrev">上一张</button>
+            <button class="lightbox-btn" id="btnLightboxNext">下一张</button>
+            <button class="lightbox-btn" id="btnLightboxCopy">复制图片</button>
+            <button class="lightbox-btn" id="btnLightboxDownload">下载原图</button>
+            <button class="lightbox-btn" id="btnLightboxClose">关闭</button>
         </div>
     </div>
 
@@ -966,9 +1087,20 @@
         let downloadTasks = [];
         let currentQuickShareUrl = '';
         let lastConnectUrls = [];
+        let selectedBatchFiles = new Map();
+        let allMessages = [];
+        let lightboxImages = [];
+        let currentLightboxIndex = 0;
+        const MAX_ACTIVE_DOWNLOADS = 2;
         const MAX_FILE_SIZE = 1024 * 1024 * 1024 * 1024 * 1024; // 1PB, effectively unlimited
         const DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024;
         const MAX_UPLOAD_CHUNK_RETRIES = 3;
+        const FILE_EXPIRATION_LABELS = {
+            '1h': '1 小时后过期',
+            '1d': '1 天后过期',
+            '7d': '7 天后过期',
+            never: '永久保留'
+        };
 
         // 生成或获取一个随机的客户端名称，用于区分“自己”和“别人”
         function getClientName() {
@@ -1119,6 +1251,9 @@
         document.getElementById('btnClearFiles').addEventListener('click', () => {
             clearUploadedFiles();
         });
+        document.getElementById('btnBatchDownload').addEventListener('click', () => {
+            downloadSelectedFilesAsZip();
+        });
 
         document.getElementById('btnSaveConfig').addEventListener('click', () => {
             const inputVal = document.getElementById('serverUrlInput').value;
@@ -1180,19 +1315,56 @@
                 })
                 .then(data => {
                     if (data.success && data.messages) {
-                        const container = document.getElementById('messages');
-                        container.innerHTML = '';
-                        if (!data.messages.length) {
-                            renderMessagesPlaceholder('暂无消息，发送一条文字或文件试试。');
-                        } else {
-                            data.messages.forEach(msg => appendMessage(msg));
-                        }
-                        scrollToBottom();
+                        allMessages = data.messages;
+                        renderMessages();
                     }
                 })
                 .catch(() => {
                     updateConnectionStatus(false);
                 });
+        }
+
+        function getFilteredMessages() {
+            const keyword = document.getElementById('fileSearchInput').value.trim().toLowerCase();
+            const device = document.getElementById('deviceFilterInput').value.trim().toLowerCase();
+            const date = document.getElementById('dateFilterInput').value;
+
+            return allMessages.filter(msg => {
+                const text = [
+                    msg.content,
+                    msg.fileName,
+                    msg.fileDisplayName,
+                    msg.displaySender,
+                    msg.sender,
+                    msg.clientName,
+                    msg.ip
+                ].join(' ').toLowerCase();
+                if (keyword && !text.includes(keyword)) return false;
+                if (device && !text.includes(device)) return false;
+                if (date) {
+                    const msgDate = new Date(msg.timestamp || Date.now()).toISOString().slice(0, 10);
+                    if (msgDate !== date) return false;
+                }
+                return true;
+            });
+        }
+
+        function renderMessages() {
+            const container = document.getElementById('messages');
+            const messages = getFilteredMessages();
+            container.innerHTML = '';
+            lightboxImages = [];
+            selectedBatchFiles = new Map();
+            if (!messages.length) {
+                renderMessagesPlaceholder(allMessages.length ? '没有匹配的消息或文件。' : '暂无消息，发送一条文字或文件试试。');
+                return;
+            }
+            messages.forEach(msg => appendMessage(msg));
+            scrollToBottom();
+        }
+
+        function applyMessageFilters() {
+            renderMessages();
         }
 
         function formatMessageTime(timestamp) {
@@ -1203,6 +1375,27 @@
             const hours = String(date.getHours()).padStart(2, '0');
             const minutes = String(date.getMinutes()).padStart(2, '0');
             return `${year}-${month}-${day} ${hours}:${minutes}`;
+        }
+
+        function getSelectedExpirationPreset() {
+            const select = document.getElementById('fileExpireSelect');
+            return select ? select.value || 'never' : 'never';
+        }
+
+        function getExpirationTimestamp(preset) {
+            const now = Date.now();
+            if (preset === '1h') return now + 60 * 60 * 1000;
+            if (preset === '1d') return now + 24 * 60 * 60 * 1000;
+            if (preset === '7d') return now + 7 * 24 * 60 * 60 * 1000;
+            return null;
+        }
+
+        function formatExpirationTip(msg) {
+            if (!msg || !msg.fileUrl) return '';
+            if (msg.expiresAt) {
+                return `保留至 ${formatMessageTime(msg.expiresAt)}`;
+            }
+            return FILE_EXPIRATION_LABELS[msg.expirationPreset || 'never'] || '永久保留';
         }
 
         function renderMessagesPlaceholder(text) {
@@ -1670,9 +1863,10 @@
                 try {
                     const data = JSON.parse(e.data);
                     if (data.type === 'chat-message') {
-                        appendMessage(data);
-                        scrollToBottom();
+                        allMessages.push(data);
+                        renderMessages();
                     } else if (data.type === 'chat_clear') {
+                        allMessages = [];
                         renderMessagesPlaceholder('记录已被清空');
                     } else if (data.type === 'files_cleared') {
                         loadHistory();
@@ -1733,12 +1927,25 @@
                     finalUrl += (finalUrl.includes('?') ? '&' : '?') + 'name=' + encodeURIComponent(msg.fileName);
                 }
                 
+                const expireTip = formatExpirationTip(msg);
+                const selectableFile = {
+                    fileUrl: msg.fileUrl,
+                    fileName: msg.fileName || displayFileName,
+                    fileDisplayName: displayFileName
+                };
+                const selectableValue = escapeAttribute(JSON.stringify(selectableFile));
+                const selectHtml = `<label><input type="checkbox" class="batch-file-check" data-batch-file="${selectableValue}">加入打包</label>`;
                 if (msg.fileType && msg.fileType.startsWith('image/')) {
-                    contentHtml = `<img src="${finalUrl}" class="chat-image" onclick="window.open('${finalUrl}', '_blank')" alt="图片" title="点击查看大图">`;
+                    const imageIndex = lightboxImages.length;
+                    lightboxImages.push({
+                        url: finalUrl,
+                        fileName: msg.fileName || displayFileName
+                    });
+                    contentHtml = `${selectHtml}<img src="${finalUrl}" class="chat-image" data-lightbox-index="${imageIndex}" alt="图片" title="点击预览大图"><div class="file-expire-tip">${escapeHtml(expireTip)}</div>`;
                 } else {
-                    contentHtml = `<a href="${finalUrl}" class="chat-file-link tracked-download" data-download-url="${escapeAttribute(finalUrl)}" data-download-name="${escapeAttribute(msg.fileName || displayFileName)}" download="${escapeHtml(msg.fileName || displayFileName)}">
+                    contentHtml = `${selectHtml}<a href="${finalUrl}" class="chat-file-link tracked-download" data-download-url="${escapeAttribute(finalUrl)}" data-download-name="${escapeAttribute(msg.fileName || displayFileName)}" download="${escapeHtml(msg.fileName || displayFileName)}">
                         <span class="file-icon">📄</span> <span style="word-break: break-all;">${escapeHtml(displayFileName)}</span>
-                    </a>`;
+                    </a><div class="file-expire-tip">${escapeHtml(expireTip)}</div>`;
                 }
             } else {
                 contentHtml = escapeHtml(msg.content);
@@ -1792,6 +1999,8 @@
                 payload.fileName = fileInfo.fileName;
                 payload.fileDisplayName = fileInfo.fileDisplayName || fileInfo.fileName;
                 payload.fileType = fileInfo.fileType;
+                payload.expirationPreset = fileInfo.expirationPreset || getSelectedExpirationPreset();
+                payload.expiresAt = fileInfo.expiresAt || getExpirationTimestamp(payload.expirationPreset);
             }
 
             return payload;
@@ -2003,8 +2212,10 @@
                         ? (task.error || '下载失败')
                         : task.status === 'paused'
                             ? '已暂停'
-                            : percentText;
-                const canPause = task.status === 'downloading';
+                            : task.status === 'queued'
+                                ? '排队中'
+                                : percentText;
+                const canPause = task.status === 'downloading' || task.status === 'queued';
                 const canResume = task.status === 'paused' || task.status === 'error';
 
                 return `
@@ -2067,6 +2278,92 @@
             document.body.appendChild(anchor);
             anchor.click();
             document.body.removeChild(anchor);
+        }
+
+        async function downloadSelectedFilesAsZip() {
+            const files = Array.from(selectedBatchFiles.values());
+            if (!files.length) {
+                alert('请先勾选要打包下载的文件');
+                return;
+            }
+            try {
+                const response = await apiFetch('/api/chat/batch-download', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ files })
+                });
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    throw new Error(data.error || '打包下载失败');
+                }
+                const blob = await response.blob();
+                triggerBrowserDownload(blob, `lan-quick-transfer-${new Date().toISOString().slice(0, 10)}.zip`);
+            } catch (err) {
+                alert(err.message || '打包下载失败，请检查服务器连接');
+            }
+        }
+
+        function renderLightbox() {
+            const item = lightboxImages[currentLightboxIndex];
+            if (!item) return;
+            document.getElementById('lightboxImage').src = item.url;
+            document.getElementById('imageLightbox').classList.add('active');
+        }
+
+        function openLightbox(index) {
+            if (!lightboxImages.length) return;
+            currentLightboxIndex = Math.max(0, Math.min(lightboxImages.length - 1, Number(index) || 0));
+            renderLightbox();
+        }
+
+        function closeLightbox() {
+            document.getElementById('imageLightbox').classList.remove('active');
+            document.getElementById('lightboxImage').removeAttribute('src');
+        }
+
+        function moveLightbox(step) {
+            if (!lightboxImages.length) return;
+            currentLightboxIndex = (currentLightboxIndex + step + lightboxImages.length) % lightboxImages.length;
+            renderLightbox();
+        }
+
+        async function copyLightboxImage() {
+            const item = lightboxImages[currentLightboxIndex];
+            if (!item || !navigator.clipboard || !window.ClipboardItem) {
+                alert('当前浏览器不支持复制图片');
+                return;
+            }
+            try {
+                const response = await fetch(item.url);
+                const blob = await response.blob();
+                await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
+                alert('图片已复制到剪贴板');
+            } catch (err) {
+                alert('复制图片失败');
+            }
+        }
+
+        function downloadLightboxImage() {
+            const item = lightboxImages[currentLightboxIndex];
+            if (!item) return;
+            fallbackDirectDownload(item.url, item.fileName);
+        }
+
+        async function sendClipboardText() {
+            if (!navigator.clipboard || !navigator.clipboard.readText) {
+                alert('当前浏览器不支持读取剪贴板');
+                return;
+            }
+            try {
+                const text = (await navigator.clipboard.readText()).trim();
+                if (!text) {
+                    alert('剪贴板没有可发送的文本');
+                    return;
+                }
+                sendMessage(text);
+            } catch (err) {
+                alert('读取剪贴板失败，请检查浏览器权限');
+            }
         }
 
         function parseContentRangeTotal(value) {
@@ -2173,6 +2470,7 @@
                     });
                     triggerBrowserDownload(finalBlob, taskNow.fileName);
                     removeDownloadTaskLater(taskId, 6000);
+                    processDownloadQueue();
                 } catch (err) {
                     const taskNow = getDownloadTaskById(taskId);
                     if (!taskNow || taskNow.controller !== controller || taskNow.status === 'deleted') return;
@@ -2192,23 +2490,26 @@
                         speed: 0,
                         remainingSeconds: null
                     });
+                    processDownloadQueue();
                 }
             })();
         }
 
         function pauseDownloadTask(taskId) {
             const task = getDownloadTaskById(taskId);
-            if (!task || task.status !== 'downloading') return;
+            if (!task || (task.status !== 'downloading' && task.status !== 'queued')) return;
             updateDownloadTask(taskId, { status: 'paused', speed: 0, remainingSeconds: null });
             if (task.controller) {
                 task.controller.abort();
             }
+            processDownloadQueue();
         }
 
         function resumeDownloadTask(taskId) {
             const task = getDownloadTaskById(taskId);
             if (!task || (task.status !== 'paused' && task.status !== 'error')) return;
-            startDownloadRequest(taskId);
+            updateDownloadTask(taskId, { status: 'queued', error: '', speed: 0, remainingSeconds: null });
+            processDownloadQueue();
         }
 
         function deleteDownloadTask(taskId) {
@@ -2219,6 +2520,34 @@
             }
             downloadTasks = downloadTasks.filter(item => item.id !== taskId);
             renderDownloadTasks();
+            processDownloadQueue();
+        }
+
+        function pauseAllDownloads() {
+            downloadTasks
+                .filter(task => task.status === 'downloading' || task.status === 'queued')
+                .forEach(task => pauseDownloadTask(task.id));
+        }
+
+        function resumeAllDownloads() {
+            downloadTasks
+                .filter(task => task.status === 'paused' || task.status === 'error')
+                .forEach(task => updateDownloadTask(task.id, { status: 'queued', error: '', speed: 0, remainingSeconds: null }));
+            processDownloadQueue();
+        }
+
+        function deleteAllDownloads() {
+            [...downloadTasks].forEach(task => deleteDownloadTask(task.id));
+        }
+
+        function processDownloadQueue() {
+            const activeCount = downloadTasks.filter(task => task.status === 'downloading').length;
+            const availableSlots = Math.max(0, MAX_ACTIVE_DOWNLOADS - activeCount);
+            if (!availableSlots) return;
+            downloadTasks
+                .filter(task => task.status === 'queued')
+                .slice(0, availableSlots)
+                .forEach(task => startDownloadRequest(task.id));
         }
 
         function startTrackedDownload(url, fileName) {
@@ -2234,14 +2563,14 @@
                 progress: 0,
                 speed: 0,
                 remainingSeconds: null,
-                status: 'downloading',
+                status: 'queued',
                 error: '',
                 chunks: [],
                 controller: null,
                 contentType: ''
             });
             renderDownloadTasks();
-            startDownloadRequest(taskId);
+            processDownloadQueue();
         }
 
         function setBatchUploadingState(uploading) {
@@ -2594,7 +2923,22 @@
         document.getElementById('sendBtn').addEventListener('click', () => {
             sendMessage(document.getElementById('chatInput').value.trim());
         });
+        document.getElementById('fileSearchInput').addEventListener('input', applyMessageFilters);
+        document.getElementById('deviceFilterInput').addEventListener('input', applyMessageFilters);
+        document.getElementById('dateFilterInput').addEventListener('change', applyMessageFilters);
+        document.getElementById('btnClearFilters').addEventListener('click', () => {
+            document.getElementById('fileSearchInput').value = '';
+            document.getElementById('deviceFilterInput').value = '';
+            document.getElementById('dateFilterInput').value = '';
+            applyMessageFilters();
+        });
+        document.getElementById('btnSendClipboard').addEventListener('click', sendClipboardText);
         document.getElementById('messages').addEventListener('click', (e) => {
+            const image = e.target.closest('.chat-image[data-lightbox-index]');
+            if (image) {
+                openLightbox(image.getAttribute('data-lightbox-index'));
+                return;
+            }
             const link = e.target.closest('.tracked-download');
             if (!link) return;
             e.preventDefault();
@@ -2602,6 +2946,20 @@
                 link.getAttribute('data-download-url'),
                 link.getAttribute('data-download-name')
             );
+        });
+        document.getElementById('messages').addEventListener('change', (e) => {
+            const checkbox = e.target.closest('.batch-file-check');
+            if (!checkbox) return;
+            try {
+                const fileInfo = JSON.parse(checkbox.getAttribute('data-batch-file') || '{}');
+                if (!fileInfo.fileUrl) return;
+                if (checkbox.checked) {
+                    selectedBatchFiles.set(fileInfo.fileUrl, fileInfo);
+                } else {
+                    selectedBatchFiles.delete(fileInfo.fileUrl);
+                }
+            } catch (err) {
+            }
         });
         document.getElementById('uploadTaskList').addEventListener('click', (e) => {
             const retryButton = e.target.closest('[data-upload-retry-id]');
@@ -2620,6 +2978,19 @@
                 resumeDownloadTask(taskId);
             } else if (action === 'delete') {
                 deleteDownloadTask(taskId);
+            }
+        });
+        document.getElementById('btnPauseAllDownloads').addEventListener('click', pauseAllDownloads);
+        document.getElementById('btnResumeAllDownloads').addEventListener('click', resumeAllDownloads);
+        document.getElementById('btnDeleteAllDownloads').addEventListener('click', deleteAllDownloads);
+        document.getElementById('btnLightboxPrev').addEventListener('click', () => moveLightbox(-1));
+        document.getElementById('btnLightboxNext').addEventListener('click', () => moveLightbox(1));
+        document.getElementById('btnLightboxCopy').addEventListener('click', copyLightboxImage);
+        document.getElementById('btnLightboxDownload').addEventListener('click', downloadLightboxImage);
+        document.getElementById('btnLightboxClose').addEventListener('click', closeLightbox);
+        document.getElementById('imageLightbox').addEventListener('click', (e) => {
+            if (e.target.id === 'imageLightbox') {
+                closeLightbox();
             }
         });
         
