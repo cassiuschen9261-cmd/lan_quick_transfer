@@ -556,6 +556,15 @@
             color: var(--text-main);
             margin-bottom: 8px;
         }
+        .upload-status-meta {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
         .upload-progress-track {
             height: 8px;
             background: #e5e7eb;
@@ -688,6 +697,24 @@
             color: var(--primary);
             pointer-events: none;
         }
+        .quick-share-bar {
+            padding: 10px 24px;
+            background: #eef2ff;
+            border-bottom: 1px solid #c7d2fe;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 0.9rem;
+        }
+        .quick-share-bar.active {
+            display: flex;
+        }
+        .quick-share-url {
+            color: #3730a3;
+            font-weight: 600;
+            word-break: break-all;
+        }
     </style>
 </head>
 <body>
@@ -802,6 +829,10 @@
                 </div>
             </div>
         </div>
+        <div class="quick-share-bar" id="quickShareBar">
+            <div>推荐访问地址：<span class="quick-share-url" id="quickShareUrl">正在获取...</span></div>
+            <button class="small-btn" id="btnCopyQuickShare">复制地址</button>
+        </div>
         
         <div class="chat-area">
             <div class="messages" id="messages">
@@ -829,6 +860,10 @@
                 <div class="upload-progress-track">
                     <div class="upload-progress-fill" id="uploadProgressFill"></div>
                 </div>
+                <div class="upload-status-meta" id="uploadStatusMeta">
+                    <span>速度 --</span>
+                    <span>剩余 --</span>
+                </div>
             </div>
             <div class="download-status" id="downloadStatus">
                 <div class="upload-status-text">下载任务</div>
@@ -847,8 +882,10 @@
         let isUploadingBatch = false;
         let downloadTaskId = 0;
         let downloadTasks = [];
+        let currentQuickShareUrl = '';
         const MAX_FILE_SIZE = 1024 * 1024 * 1024 * 1024 * 1024; // 1PB, effectively unlimited
         const DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024;
+        const MAX_UPLOAD_CHUNK_RETRIES = 3;
 
         // 生成或获取一个随机的客户端名称，用于区分“自己”和“别人”
         function getClientName() {
@@ -954,6 +991,9 @@
         });
         document.getElementById('btnRefreshConnect').addEventListener('click', () => {
             loadServerInfo();
+        });
+        document.getElementById('btnCopyQuickShare').addEventListener('click', () => {
+            copyText(currentQuickShareUrl);
         });
         document.getElementById('connectQrImage').addEventListener('error', () => {
             document.getElementById('connectQrTip').textContent = '本地二维码生成失败，请直接复制下方地址访问';
@@ -1146,6 +1186,7 @@
             }
 
             const preferredUrl = serverInfo.preferredUrl || getServerUrl() || '';
+            updateQuickShareBar(preferredUrl);
             if (preferredUrl) {
                 const qrUrl = getQrImageUrl(preferredUrl);
                 if (qrUrl) {
@@ -1197,6 +1238,19 @@
                     `;
                 }).join('');
             }
+        }
+
+        function updateQuickShareBar(url) {
+            const bar = document.getElementById('quickShareBar');
+            const text = document.getElementById('quickShareUrl');
+            currentQuickShareUrl = url || '';
+            if (!currentQuickShareUrl) {
+                bar.classList.remove('active');
+                text.textContent = '暂无可用地址';
+                return;
+            }
+            text.textContent = currentQuickShareUrl;
+            bar.classList.add('active');
         }
 
         function renderStorageInfo() {
@@ -1701,19 +1755,28 @@
             });
         }
 
-        function setUploadProgress(text, percent, visible) {
+        function setUploadProgress(text, percent, visible, meta = {}) {
             const panel = document.getElementById('uploadStatus');
             const textEl = document.getElementById('uploadStatusText');
             const fillEl = document.getElementById('uploadProgressFill');
+            const metaEl = document.getElementById('uploadStatusMeta');
 
             if (visible) {
                 panel.classList.add('active');
                 textEl.textContent = text;
                 fillEl.style.width = `${Math.max(0, Math.min(100, percent || 0))}%`;
+                const speedText = meta.speed ? `速度 ${formatSpeed(meta.speed)}` : '速度 --';
+                const remainingText = Number.isFinite(meta.remainingSeconds) ? `剩余 ${formatRemainingTime(meta.remainingSeconds)}` : '剩余 --';
+                const sizeText = meta.loadedBytes || meta.totalBytes
+                    ? `${formatBytes(meta.loadedBytes || 0)} / ${formatBytes(meta.totalBytes || 0)}`
+                    : '';
+                const retryText = meta.retryAttempt ? `第 ${meta.retryAttempt} 次重试` : sizeText;
+                metaEl.innerHTML = `<span>${escapeHtml(speedText)}</span><span>${escapeHtml(remainingText)}</span><span>${escapeHtml(retryText)}</span>`;
             } else {
                 panel.classList.remove('active');
                 textEl.textContent = '准备上传...';
                 fillEl.style.width = '0%';
+                metaEl.innerHTML = '<span>速度 --</span><span>剩余 --</span>';
             }
         }
 
@@ -1948,6 +2011,23 @@
             return `upload_${hashString(raw)}`;
         }
 
+        function getChunkUploadedBytes(fileSize, chunkSize, chunkIndex) {
+            const start = chunkIndex * chunkSize;
+            return Math.max(0, Math.min(fileSize, start + chunkSize) - start);
+        }
+
+        function buildUploadMeta(loadedBytes, totalBytes, startedAt) {
+            const elapsedSeconds = Math.max(0.2, (Date.now() - startedAt) / 1000);
+            const speed = loadedBytes > 0 ? loadedBytes / elapsedSeconds : 0;
+            const remainingSeconds = speed > 0 ? Math.max(0, (totalBytes - loadedBytes) / speed) : null;
+            return {
+                loadedBytes,
+                totalBytes,
+                speed,
+                remainingSeconds
+            };
+        }
+
         function uploadChunkWithXHR(uploadKey, chunkIndex, totalChunks, chunkBlob, onProgress) {
             const baseUrl = getServerUrl();
             return new Promise((resolve, reject) => {
@@ -1986,6 +2066,29 @@
                 formData.append('chunk', chunkBlob, `${chunkIndex}.part`);
                 xhr.send(formData);
             });
+        }
+
+        function delay(ms) {
+            return new Promise(resolve => window.setTimeout(resolve, ms));
+        }
+
+        async function uploadChunkWithRetry(uploadKey, chunkIndex, totalChunks, chunkBlob, onProgress, onRetry) {
+            let lastError = null;
+            for (let attempt = 1; attempt <= MAX_UPLOAD_CHUNK_RETRIES; attempt++) {
+                try {
+                    return await uploadChunkWithXHR(uploadKey, chunkIndex, totalChunks, chunkBlob, onProgress);
+                } catch (err) {
+                    lastError = err;
+                    if (attempt >= MAX_UPLOAD_CHUNK_RETRIES) {
+                        break;
+                    }
+                    if (onRetry) {
+                        onRetry(attempt + 1, err);
+                    }
+                    await delay(600 * attempt);
+                }
+            }
+            throw lastError || new Error('分片上传失败');
         }
 
         function sendUploadedFileMessage(fileInfo) {
@@ -2036,11 +2139,14 @@
             const totalChunks = initData.totalChunks || Math.max(1, Math.ceil(file.size / DEFAULT_CHUNK_SIZE));
             const chunkSize = initData.chunkSize || DEFAULT_CHUNK_SIZE;
             const uploadedSet = new Set(Array.isArray(initData.uploadedChunks) ? initData.uploadedChunks : []);
+            const startedAt = Date.now();
+            let uploadedBytes = 0;
 
             for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
                 if (uploadedSet.has(chunkIndex)) {
+                    uploadedBytes += getChunkUploadedBytes(file.size, chunkSize, chunkIndex);
                     const skippedProgress = ((index + ((chunkIndex + 1) / totalChunks)) / totalCount) * 100;
-                    setUploadProgress(`继续续传 (${index + 1}/${totalCount}) ${displayName}`, skippedProgress, true);
+                    setUploadProgress(`继续续传 (${index + 1}/${totalCount}) ${displayName}`, skippedProgress, true, buildUploadMeta(uploadedBytes, file.size, startedAt));
                     continue;
                 }
 
@@ -2048,14 +2154,22 @@
                 const end = Math.min(file.size, start + chunkSize);
                 const chunkBlob = file.slice(start, end);
 
-                await uploadChunkWithXHR(initData.uploadKey, chunkIndex, totalChunks, chunkBlob, (chunkRatio) => {
+                await uploadChunkWithRetry(initData.uploadKey, chunkIndex, totalChunks, chunkBlob, (chunkRatio) => {
+                    const currentUploadedBytes = uploadedBytes + Math.round(chunkBlob.size * chunkRatio);
                     const fileProgress = (chunkIndex + chunkRatio) / totalChunks;
                     const overallProgress = ((index + fileProgress) / totalCount) * 100;
-                    setUploadProgress(`正在上传 (${index + 1}/${totalCount}) ${displayName}`, overallProgress, true);
+                    setUploadProgress(`正在上传 (${index + 1}/${totalCount}) ${displayName}`, overallProgress, true, buildUploadMeta(currentUploadedBytes, file.size, startedAt));
+                }, (retryAttempt) => {
+                    const retryProgress = ((index + (chunkIndex / totalChunks)) / totalCount) * 100;
+                    setUploadProgress(`网络波动，正在重试 (${index + 1}/${totalCount}) ${displayName}`, retryProgress, true, {
+                        ...buildUploadMeta(uploadedBytes, file.size, startedAt),
+                        retryAttempt
+                    });
                 });
 
+                uploadedBytes += chunkBlob.size;
                 const completedProgress = ((index + ((chunkIndex + 1) / totalChunks)) / totalCount) * 100;
-                setUploadProgress(`正在上传 (${index + 1}/${totalCount}) ${displayName}`, completedProgress, true);
+                setUploadProgress(`正在上传 (${index + 1}/${totalCount}) ${displayName}`, completedProgress, true, buildUploadMeta(uploadedBytes, file.size, startedAt));
             }
 
             const completeResponse = await apiFetch('/api/chat/upload/complete', {
