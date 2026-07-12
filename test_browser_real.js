@@ -272,6 +272,7 @@ async function main() {
         await clientB.page.click('#btnCloseStorage');
 
         const uploadedFileName = `browser-${testMarker}.txt`;
+        await clientA.page.selectOption('#fileExpireSelect', '1d');
         await clientA.page.setInputFiles('#fileInput', {
             name: uploadedFileName,
             mimeType: 'text/plain',
@@ -283,6 +284,51 @@ async function main() {
             waitForPageText(clientA.page, '#messages', uploadedFileName, 15000),
             waitForPageText(clientB.page, '#messages', uploadedFileName, 15000)
         ]);
+        await waitForPageText(clientB.page, '#messages', '保留至', 15000);
+        await clientB.page.waitForSelector('.batch-file-check', { timeout: 10000 });
+        const batchZipResult = await clientB.page.evaluate(async () => {
+            const checkbox = document.querySelector('.batch-file-check');
+            checkbox.checked = true;
+            checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+            const fileInfo = JSON.parse(checkbox.getAttribute('data-batch-file') || '{}');
+            const response = await fetch('/api/chat/batch-download', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Client-Name': localClientName
+                },
+                body: JSON.stringify({ files: [fileInfo] })
+            });
+            const buffer = await response.arrayBuffer();
+            const bytes = Array.from(new Uint8Array(buffer.slice(0, 4)));
+            return {
+                ok: response.ok,
+                contentType: response.headers.get('content-type'),
+                signature: bytes.map(value => value.toString(16).padStart(2, '0')).join('')
+            };
+        });
+        if (!batchZipResult.ok || batchZipResult.signature !== '504b0304') {
+            throw new Error('Batch ZIP download failed.');
+        }
+        await clientB.page.fill('#fileSearchInput', uploadedFileName);
+        await waitForPageText(clientB.page, '#messages', uploadedFileName, 10000);
+        await clientB.page.fill('#fileSearchInput', 'no-such-file-for-filter');
+        await waitForPageText(clientB.page, '#messages', '没有匹配', 10000);
+        await clientB.page.click('#btnClearFilters');
+        await waitForPageText(clientB.page, '#messages', uploadedFileName, 10000);
+        const lightboxResult = await clientB.page.evaluate(() => {
+            lightboxImages.push({
+                url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+                fileName: 'simulated.png'
+            });
+            openLightbox(lightboxImages.length - 1);
+            const active = document.getElementById('imageLightbox').classList.contains('active');
+            closeLightbox();
+            return active && !document.getElementById('imageLightbox').classList.contains('active');
+        });
+        if (!lightboxResult) {
+            throw new Error('Image lightbox did not open and close correctly.');
+        }
 
         await clientB.page.locator('.tracked-download').last().click();
         await clientB.page.waitForFunction(
@@ -343,6 +389,10 @@ async function main() {
         if (!simulatedDownloadActions.includes('暂停') || !simulatedDownloadActions.includes('继续下载') || !simulatedDownloadActions.includes('删除')) {
             throw new Error('Download pause/resume/delete actions were not rendered.');
         }
+        const queueControlLabels = await clientB.page.$$eval('.download-status-actions button', buttons => buttons.map(button => button.textContent.trim()));
+        if (!queueControlLabels.includes('全部暂停') || !queueControlLabels.includes('全部继续') || !queueControlLabels.includes('全部删除')) {
+            throw new Error('Download queue controls were not rendered.');
+        }
         await clientB.page.locator('[data-download-action="delete"]').first().click();
         await clientB.page.waitForFunction(
             (name) => {
@@ -371,8 +421,13 @@ async function main() {
             storagePolicyReload: 'ok',
             realUpload: 'ok',
             uploadTaskList: 'ok',
+            fileExpiration: 'ok',
+            batchZipDownload: 'ok',
+            fileSearch: 'ok',
+            imageLightbox: 'ok',
             trackedDownload: 'ok',
             downloadActions: 'ok',
+            downloadQueueControls: 'ok',
             clearFilesSync: 'ok'
         };
 

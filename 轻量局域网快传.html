@@ -1091,7 +1091,7 @@
         let allMessages = [];
         let lightboxImages = [];
         let currentLightboxIndex = 0;
-        const MAX_ACTIVE_DOWNLOADS = 2;
+        const MAX_ACTIVE_DOWNLOADS = 3;
         const MAX_FILE_SIZE = 1024 * 1024 * 1024 * 1024 * 1024; // 1PB, effectively unlimited
         const DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024;
         const MAX_UPLOAD_CHUNK_RETRIES = 3;
@@ -2473,8 +2473,11 @@
                     processDownloadQueue();
                 } catch (err) {
                     const taskNow = getDownloadTaskById(taskId);
-                    if (!taskNow || taskNow.controller !== controller || taskNow.status === 'deleted') return;
+                    if (!taskNow || taskNow.status === 'deleted') return;
+                    // 检查是否是同一个下载会话（controller可能已被替换为新的）
+                    if (taskNow.controller && taskNow.controller !== controller) return;
                     if (err.name === 'AbortError' || taskNow.status === 'paused') {
+                        // 用户主动暂停：保留已下载的数据以便断点续传
                         updateDownloadTask(taskId, {
                             controller: null,
                             status: 'paused',
@@ -2498,9 +2501,15 @@
         function pauseDownloadTask(taskId) {
             const task = getDownloadTaskById(taskId);
             if (!task || (task.status !== 'downloading' && task.status !== 'queued')) return;
-            updateDownloadTask(taskId, { status: 'paused', speed: 0, remainingSeconds: null });
-            if (task.controller) {
-                task.controller.abort();
+            // 先abort再更新状态，避免catch块中的竞态条件
+            const controller = task.controller;
+            if (controller) {
+                // 在abort之前标记为paused，让catch块知道这是用户主动暂停
+                updateDownloadTask(taskId, { status: 'paused', speed: 0, remainingSeconds: null });
+                controller.abort();
+            } else {
+                // queued状态的任务没有controller，直接标记暂停
+                updateDownloadTask(taskId, { status: 'paused', speed: 0, remainingSeconds: null });
             }
             processDownloadQueue();
         }
@@ -2508,14 +2517,16 @@
         function resumeDownloadTask(taskId) {
             const task = getDownloadTaskById(taskId);
             if (!task || (task.status !== 'paused' && task.status !== 'error')) return;
-            updateDownloadTask(taskId, { status: 'queued', error: '', speed: 0, remainingSeconds: null });
+            // 清除controller引用，确保重新下载时创建新的AbortController
+            updateDownloadTask(taskId, { status: 'queued', error: '', speed: 0, remainingSeconds: null, controller: null });
             processDownloadQueue();
         }
 
         function deleteDownloadTask(taskId) {
             const task = getDownloadTaskById(taskId);
             if (task && task.controller) {
-                updateDownloadTask(taskId, { status: 'deleted' });
+                // 标记为deleted防止catch块再次更新状态
+                task.status = 'deleted';
                 task.controller.abort();
             }
             downloadTasks = downloadTasks.filter(item => item.id !== taskId);
@@ -2532,7 +2543,9 @@
         function resumeAllDownloads() {
             downloadTasks
                 .filter(task => task.status === 'paused' || task.status === 'error')
-                .forEach(task => updateDownloadTask(task.id, { status: 'queued', error: '', speed: 0, remainingSeconds: null }));
+                .forEach(task => {
+                    updateDownloadTask(task.id, { status: 'queued', error: '', speed: 0, remainingSeconds: null, controller: null });
+                });
             processDownloadQueue();
         }
 

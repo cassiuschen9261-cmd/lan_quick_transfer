@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="LAN Quick Transfer"
+           Manufacturer="LAN Quick Transfer"
+           Version="1.1.0"
+           UpgradeCode="7B3F2A1C-9D4E-4F5A-8B6C-1E2D3F4A5B6C"
+           Language="1033"
+           Codepage="1252">
+    <SummaryInformation Description="LAN Quick Transfer 1.1.0 installer" />
+
+    <!-- Major upgrade: uninstall old versions before installing new -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of LAN Quick Transfer is already installed." />
+
+    <Media Id="1" Cabinet="lanqt.cab" EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- Installation directory structure -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="LAN Quick Transfer">
+        <!-- harvest.wxs fills in the app files, runtime, node_modules, scripts -->
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Start Menu shortcuts -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="StartMenuDir" Name="LAN Quick Transfer" />
+    </StandardDirectory>
+
+    <!-- Desktop shortcut handled below via StandardDirectory -->
+
+    <Feature Id="Complete" Title="LAN Quick Transfer" Level="1"
+             Description="Complete LAN file transfer application">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="StartMenuTrayShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
+      <ComponentRef Id="RegistryEntry" />
+    </Feature>
+
+    <!-- Start Menu shortcut component -->
+    <DirectoryRef Id="StartMenuDir">
+      <Component Id="StartMenuShortcut" Guid="A1B2C3D4-1111-2222-3333-444455556666">
+        <Shortcut Id="StartMenuLnk"
+                  Name="LAN Quick Transfer"
+                  Description="Start LAN Quick Transfer server"
+                  Target="[INSTALLFOLDER]launch_app.bat"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Show="normal"
+                  Icon="AppIcon" />
+        <RegistryValue Root="HKCU" Key="Software\LANQuickTransfer\StartMenu"
+                       Name="Shortcut" Type="integer" Value="1" KeyPath="yes" />
+        <RemoveFolder Id="RemoveStartMenuDir" On="uninstall" />
+      </Component>
+      <Component Id="StartMenuTrayShortcut" Guid="A1B2C3D4-1111-2222-3333-444455557777">
+        <Shortcut Id="StartMenuTrayLnk"
+                  Name="LAN Quick Transfer (Tray)"
+                  Description="Start in Windows tray background mode"
+                  Target="[INSTALLFOLDER]launch_tray.bat"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Show="normal"
+                  Icon="AppIcon" />
+        <RegistryValue Root="HKCU" Key="Software\LANQuickTransfer\StartMenuTray"
+                       Name="Shortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- Desktop shortcut component -->
+    <DirectoryRef Id="DesktopFolder">
+      <Component Id="DesktopShortcut" Guid="A1B2C3D4-1111-2222-3333-444455558888">
+        <Shortcut Id="DesktopLnk"
+                  Name="LAN Quick Transfer"
+                  Description="Start LAN Quick Transfer server"
+                  Target="[INSTALLFOLDER]launch_app.bat"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Show="normal"
+                  Icon="AppIcon" />
+        <RegistryValue Root="HKCU" Key="Software\LANQuickTransfer\Desktop"
+                       Name="Shortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- Registry entry for ARP (Add/Remove Programs) metadata -->
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="RegistryEntry" Guid="A1B2C3D4-1111-2222-3333-444455559999">
+        <RegistryValue Root="HKLM" Key="Software\LANQuickTransfer"
+                       Name="InstallPath" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\LANQuickTransfer"
+                       Name="DisplayName" Type="string" Value="LAN Quick Transfer" />
+        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\LANQuickTransfer"
+                       Name="DisplayVersion" Type="string" Value="1.1.0" />
+        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\LANQuickTransfer"
+                       Name="Publisher" Type="string" Value="LAN Quick Transfer" />
+        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\LANQuickTransfer"
+                       Name="InstallLocation" Type="string" Value="[INSTALLFOLDER]" />
+        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\LANQuickTransfer"
+                       Name="NoModify" Type="integer" Value="1" />
+        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\LANQuickTransfer"
+                       Name="NoRepair" Type="integer" Value="1" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- Icon -->
+    <Icon Id="AppIcon" SourceFile="$(sys.SOURCEFILEDIR)\app.ico" />
+
+    <!-- Properties -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/cassiuschen9261-cmd/lan_quick_transfer" />
+
+    <!-- UI: standard install wizard with folder selection -->
+    <ui:WixUI Id="WixUI_InstallDir" />
+
+    <UIRef Id="WixUI_ErrorProgressText" />
+
+    <!-- Custom action to open the app after install (optional) -->
+    <Property Id="LAUNCHAPP" Value="0" />
+    <CustomAction Id="LaunchApp"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand='[SystemFolder]cmd.exe /c ""[INSTALLFOLDER]launch_app.bat""'
+                  Return="asyncNoWait" />
+    <InstallExecuteSequence>
+      <Custom Action="LaunchApp" After="InstallFinalize"
+              Condition="LAUNCHAPP = 1 AND NOT Installed" />
+    </InstallExecuteSequence>
+
+  </Package>
+</Wix>

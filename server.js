@@ -36,6 +36,8 @@ const DEVICES_FILE = path.join(DATA_DIR, 'devices.json');
 const UPLOAD_SESSIONS_DIR = path.join(DATA_DIR, 'upload-sessions');
 const MAX_FILE_SIZE = 1024 * 1024 * 1024 * 1024 * 1024; // 1PB, effectively unlimited
 const CHUNK_SIZE = 4 * 1024 * 1024;
+const DOWNLOAD_STREAM_HIGH_WATER_MARK = 256 * 1024; // 256KB read buffer for LAN file serving
+const DOWNLOAD_SOCKET_TIMEOUT_MS = 300 * 1000; // 5 minute socket timeout for large files
 const DEFAULT_RETENTION_DAYS = 0; // 0 means no automatic deletion by default
 const DEFAULT_MAX_STORAGE_BYTES = 0; // 0 means unlimited by default
 const AUTO_CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
@@ -51,6 +53,9 @@ const QR_DATA_CODEWORDS = 64;
 const QR_EC_CODEWORDS_PER_BLOCK = 18;
 const QR_BLOCK_COUNT = 2;
 const QR_MAX_BYTES = QR_DATA_CODEWORDS - 2;
+const FILE_EXPIRATION_PRESETS = new Set(['1h', '1d', '7d', 'never']);
+const MAX_BATCH_DOWNLOAD_FILES = 200;
+const ZIP_DOS_EPOCH = new Date('1980-01-01T00:00:00Z').getTime();
 
 // Ensure directories exist
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -410,6 +415,25 @@ function sanitizeDownloadName(value, fallback) {
     return name || fallback || 'download';
 }
 
+function normalizeExpirationPreset(value) {
+    const preset = String(value || '').trim().toLowerCase();
+    return FILE_EXPIRATION_PRESETS.has(preset) ? preset : 'never';
+}
+
+function getExpirationTimestamp(preset, baseTime = Date.now()) {
+    const normalized = normalizeExpirationPreset(preset);
+    if (normalized === '1h') {
+        return baseTime + 60 * 60 * 1000;
+    }
+    if (normalized === '1d') {
+        return baseTime + 24 * 60 * 60 * 1000;
+    }
+    if (normalized === '7d') {
+        return baseTime + 7 * 24 * 60 * 60 * 1000;
+    }
+    return null;
+}
+
 function isLocalDownloadUrl(value) {
     const url = String(value || '').trim();
     return !url || /^\/api\/chat\/download\/[^/?#]+(?:\?[^#]*)?$/.test(url);
@@ -606,6 +630,34 @@ function removeHistoryEntriesByFileNames(fileNames) {
     return removedMessages;
 }
 
+function cleanupExpiredFileMessages(now = Date.now()) {
+    const expiredFileNames = new Set();
+    for (const message of chatHistory) {
+        const expiresAt = Number(message && message.expiresAt);
+        if (!message.fileUrl || !Number.isFinite(expiresAt) || expiresAt <= 0 || expiresAt > now) {
+            continue;
+        }
+        const storedName = getFileNameFromUrl(message.fileUrl);
+        if (storedName) {
+            expiredFileNames.add(storedName);
+        }
+    }
+
+    let deletedFiles = 0;
+    let freedBytes = 0;
+    for (const fileName of expiredFileNames) {
+        const filePath = resolveUploadedFilePath(fileName);
+        const stat = filePath ? getFileStatSafe(filePath) : null;
+        if (stat && stat.isFile()) {
+            freedBytes += deleteUploadedFile({ path: filePath, size: stat.size });
+            deletedFiles += 1;
+        }
+    }
+
+    const removedMessages = removeHistoryEntriesByFileNames(expiredFileNames);
+    return { deletedFiles, removedMessages, freedBytes };
+}
+
 function deleteUploadedFile(fileInfo) {
     try {
         if (fs.existsSync(fileInfo.path)) {
@@ -720,6 +772,10 @@ function cleanupStorage(options = {}) {
     }
 
     result.removedMessages = removeHistoryEntriesByFileNames(removedFileNames);
+    const expiredResult = cleanupExpiredFileMessages(now);
+    result.deletedFiles += expiredResult.deletedFiles;
+    result.removedMessages += expiredResult.removedMessages;
+    result.freedBytes += expiredResult.freedBytes;
     return result;
 }
 
@@ -752,6 +808,118 @@ function scheduleAutoCleanup() {
     if (typeof timer.unref === 'function') {
         timer.unref();
     }
+}
+
+function getCrc32Table() {
+    if (getCrc32Table.table) {
+        return getCrc32Table.table;
+    }
+    const table = new Array(256);
+    for (let i = 0; i < 256; i++) {
+        let value = i;
+        for (let j = 0; j < 8; j++) {
+            value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+        }
+        table[i] = value >>> 0;
+    }
+    getCrc32Table.table = table;
+    return table;
+}
+
+function getCrc32(buffer) {
+    const table = getCrc32Table();
+    let crc = 0xffffffff;
+    for (const byte of buffer) {
+        crc = table[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+    }
+    return (crc ^ 0xffffffff) >>> 0;
+}
+
+function getZipDosTime(value) {
+    const date = new Date(Math.max(Number(value) || Date.now(), ZIP_DOS_EPOCH));
+    const time = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
+    const day = ((date.getFullYear() - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
+    return { time, day };
+}
+
+function writeUInt16(value) {
+    const buffer = Buffer.alloc(2);
+    buffer.writeUInt16LE(value);
+    return buffer;
+}
+
+function writeUInt32(value) {
+    const buffer = Buffer.alloc(4);
+    buffer.writeUInt32LE(value >>> 0);
+    return buffer;
+}
+
+function buildZipBuffer(files) {
+    const localParts = [];
+    const centralParts = [];
+    let offset = 0;
+
+    files.forEach((file, index) => {
+        const data = fs.readFileSync(file.path);
+        const safeName = sanitizeDownloadName(file.downloadName, `file-${index + 1}`);
+        const entryName = Buffer.from(safeName, 'utf8');
+        const crc = getCrc32(data);
+        const size = data.length;
+        const dos = getZipDosTime(file.mtimeMs);
+        const localHeader = Buffer.concat([
+            writeUInt32(0x04034b50),
+            writeUInt16(20),
+            writeUInt16(0x0800),
+            writeUInt16(0),
+            writeUInt16(dos.time),
+            writeUInt16(dos.day),
+            writeUInt32(crc),
+            writeUInt32(size),
+            writeUInt32(size),
+            writeUInt16(entryName.length),
+            writeUInt16(0),
+            entryName
+        ]);
+
+        localParts.push(localHeader, data);
+
+        centralParts.push(Buffer.concat([
+            writeUInt32(0x02014b50),
+            writeUInt16(20),
+            writeUInt16(20),
+            writeUInt16(0x0800),
+            writeUInt16(0),
+            writeUInt16(dos.time),
+            writeUInt16(dos.day),
+            writeUInt32(crc),
+            writeUInt32(size),
+            writeUInt32(size),
+            writeUInt16(entryName.length),
+            writeUInt16(0),
+            writeUInt16(0),
+            writeUInt16(0),
+            writeUInt16(0),
+            writeUInt32(0),
+            writeUInt32(offset),
+            entryName
+        ]));
+
+        offset += localHeader.length + data.length;
+    });
+
+    const centralDirectory = Buffer.concat(centralParts);
+    const endRecord = Buffer.concat([
+        writeUInt32(0x06054b50),
+        writeUInt16(0),
+        writeUInt16(0),
+        writeUInt16(files.length),
+        writeUInt16(files.length),
+        writeUInt32(centralDirectory.length),
+        writeUInt32(offset),
+        writeUInt16(0)
+    ]);
+
+    return Buffer.concat([...localParts, centralDirectory, endRecord]);
 }
 
 function broadcast(data) {
@@ -984,6 +1152,17 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// Global socket optimization for LAN file transfers
+app.use((req, res, next) => {
+    const socket = req.socket;
+    if (socket) {
+        socket.setNoDelay(true);
+        socket.setTimeout(DOWNLOAD_SOCKET_TIMEOUT_MS);
+    }
+    next();
+});
+
 app.use((req, res, next) => {
     rememberDevice(getRequestIp(req), req.headers['x-client-name']);
     next();
@@ -1022,7 +1201,7 @@ const upload = multer({
 });
 const chunkUpload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: CHUNK_SIZE + 1024 * 1024 }
+    limits: { fileSize: CHUNK_SIZE + 1024 * 1024 } // allow 1MB headroom per chunk
 });
 
 // API Routes
@@ -1042,6 +1221,7 @@ app.get('/api/session-status', (req, res) => {
 });
 
 app.get('/api/chat/history', (req, res) => {
+    runAutoCleanup('history');
     res.json({ success: true, messages: chatHistory.map(formatMessage) });
 });
 
@@ -1116,6 +1296,50 @@ app.post('/api/storage/cleanup', (req, res) => {
     });
 });
 
+app.post('/api/chat/batch-download', (req, res) => {
+    runAutoCleanup('batch_download');
+    const items = Array.isArray(req.body && req.body.files) ? req.body.files.slice(0, MAX_BATCH_DOWNLOAD_FILES) : [];
+    const selected = [];
+    const seen = new Set();
+
+    for (const item of items) {
+        const fileUrl = typeof item === 'string' ? item : item && item.fileUrl;
+        const storedName = getFileNameFromUrl(fileUrl);
+        if (!storedName || seen.has(storedName)) {
+            continue;
+        }
+        const filePath = resolveUploadedFilePath(storedName);
+        const stat = filePath ? getFileStatSafe(filePath) : null;
+        if (!stat || !stat.isFile()) {
+            continue;
+        }
+        seen.add(storedName);
+        selected.push({
+            path: filePath,
+            mtimeMs: stat.mtimeMs,
+            downloadName: typeof item === 'object' && item ? item.fileName || item.fileDisplayName || storedName : storedName
+        });
+    }
+
+    if (!selected.length) {
+        return res.status(400).json({ success: false, error: 'No downloadable files selected' });
+    }
+
+    try {
+        const zipBuffer = buildZipBuffer(selected);
+        const zipName = `lan-quick-transfer-${new Date().toISOString().slice(0, 10)}.zip`;
+        res.set({
+            'Content-Type': 'application/zip',
+            'Content-Disposition': `attachment; filename="${zipName}"`,
+            'Content-Length': zipBuffer.length
+        });
+        res.end(zipBuffer);
+    } catch (e) {
+        console.error('Failed to create batch download zip.', e);
+        res.status(500).json({ success: false, error: 'Failed to create ZIP' });
+    }
+});
+
 app.get('/api/devices', (req, res) => {
     res.json({
         success: true,
@@ -1151,7 +1375,7 @@ app.post('/api/devices/alias', (req, res) => {
 });
 
 app.post('/api/chat/send', (req, res) => {
-    const { content, sender, clientName, fileUrl, fileName, fileDisplayName, fileType, isAnnouncement } = req.body;
+    const { content, sender, clientName, fileUrl, fileName, fileDisplayName, fileType, isAnnouncement, expirationPreset, expiresAt } = req.body;
     const ip = getRequestIp(req);
     const safeContent = normalizeText(content, MAX_MESSAGE_LENGTH);
     const safeSender = normalizeText(sender, MAX_CLIENT_NAME_LENGTH);
@@ -1185,6 +1409,15 @@ app.post('/api/chat/send', (req, res) => {
         timestamp: Date.now(),
         ip
     };
+
+    if (safeFileUrl) {
+        const normalizedExpiration = normalizeExpirationPreset(expirationPreset);
+        const requestedExpiresAt = Number(expiresAt);
+        msg.expirationPreset = normalizedExpiration;
+        msg.expiresAt = Number.isFinite(requestedExpiresAt) && requestedExpiresAt > Date.now()
+            ? requestedExpiresAt
+            : getExpirationTimestamp(normalizedExpiration, msg.timestamp);
+    }
 
     chatHistory.push(msg);
     if (chatHistory.length > 500) chatHistory.shift();
@@ -1410,6 +1643,16 @@ app.get('/api/chat/download/:filename', (req, res) => {
         'Content-Type': 'application/octet-stream',
         'Content-Disposition': contentDisposition
     };
+
+    // LAN speed optimizations: disable Nagle algorithm, set socket timeout
+    const socket = req.socket;
+    if (socket) {
+        socket.setNoDelay(true);
+        socket.setTimeout(DOWNLOAD_SOCKET_TIMEOUT_MS);
+        // Set larger send buffer for LAN throughput (1MB)
+        try { socket.setSendBufferSize(1024 * 1024); } catch (e) { /* ignore if not supported */ }
+    }
+
     const range = req.headers.range;
 
     if (range) {
@@ -1441,7 +1684,14 @@ app.get('/api/chat/download/:filename', (req, res) => {
             'Content-Length': end - start + 1,
             'Content-Range': `bytes ${start}-${end}/${totalSize}`
         });
-        fs.createReadStream(filePath, { start, end }).pipe(res);
+        const readStream = fs.createReadStream(filePath, {
+            start,
+            end,
+            highWaterMark: DOWNLOAD_STREAM_HIGH_WATER_MARK
+        });
+        readStream.on('error', () => { if (!res.headersSent) res.status(500).end(); else res.end(); });
+        req.on('close', () => readStream.destroy());
+        readStream.pipe(res);
         return;
     }
 
@@ -1449,7 +1699,12 @@ app.get('/api/chat/download/:filename', (req, res) => {
         ...baseHeaders,
         'Content-Length': totalSize
     });
-    fs.createReadStream(filePath).pipe(res);
+    const readStream = fs.createReadStream(filePath, {
+        highWaterMark: DOWNLOAD_STREAM_HIGH_WATER_MARK
+    });
+    readStream.on('error', () => { if (!res.headersSent) res.status(500).end(); else res.end(); });
+    req.on('close', () => readStream.destroy());
+    readStream.pipe(res);
 });
 
 app.get('/api/events', (req, res) => {

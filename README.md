@@ -105,7 +105,26 @@
 - **Windows 辅助能力**：PowerShell、Batch、HTA、VBScript
 - **自动化测试**：JSDOM、Playwright Core / Edge
 
-## 📦 安装依赖
+## 📦 安装方式
+
+### 方式一：下载安装包（推荐）
+
+前往 [Releases](https://github.com/cassiuschen9261-cmd/lan_quick_transfer/releases) 页面下载最新版本：
+
+- `LANQuickTransfer-x.x.x.msi` - Windows MSI 安装包
+- `LANQuickTransfer-x.x.0-setup.exe` - Windows EXE 安装包
+
+安装包内置 Node.js 运行时和全部依赖，无需额外安装 Node.js，开箱即用。
+
+### 方式二：从源码运行
+
+请先安装 **Node.js 18 或更高版本**。
+
+```bash
+npm install
+```
+
+## 📦 从源码安装依赖
 
 请先安装 **Node.js 18 或更高版本**。
 
@@ -278,6 +297,15 @@ npm test
 - 没有微信 / QQ / 网盘时传文件
 - 不想经过云端的本地文件共享
 - 临时会议、实验室、办公室内快速共享文件
+
+## ⏱ 文件过期与批量下载（v1.1.0 新增）
+
+- 上传时可选择文件保留时长：1 小时 / 1 天 / 7 天 / 永久
+- 过期文件自动清理，同时移除聊天记录中的对应消息
+- 多选文件批量打包下载为 ZIP（服务端生成，最多 200 个文件）
+- 聊天消息列表支持文件搜索 / 筛选
+- 图片附件支持灯箱预览
+- 下载队列支持全部暂停 / 全部继续 / 全部删除
 
 ## 🧭 后续可改进方向
 
