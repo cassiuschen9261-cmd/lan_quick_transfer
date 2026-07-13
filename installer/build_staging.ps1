@@ -6,7 +6,7 @@ param(
     [string]$Version = "1.2.0"
 )
 $ErrorActionPreference = "Stop"
-if (-not $ProjectRoot) { $ProjectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot) }
+if (-not $ProjectRoot) { $ProjectRoot = Split-Path -Parent $PSScriptRoot }
 if (-not $OutDir) { $OutDir = Join-Path $PSScriptRoot "build" }
 $stagingRoot = Join-Path $OutDir "staging"
 $appDir = Join-Path $stagingRoot "LANQuickTransfer"
