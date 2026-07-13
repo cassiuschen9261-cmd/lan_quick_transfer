@@ -1,6 +1,6 @@
 {
   "name": "lan_quick_transfer",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Standalone LAN chat and file transfer tool",
   "main": "server.js",
   "scripts": {

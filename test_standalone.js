@@ -119,6 +119,15 @@ async function readSseUntil(reader, predicate, timeoutMs = 10000) {
 async function runUiSmokeTest(html) {
     const fetchCalls = [];
     const alerts = [];
+    const toastMessages = [];
+    function getToastText() {
+        const container = document.getElementById('toastContainer');
+        return container ? container.textContent : '';
+    }
+    function clickToastConfirm() {
+        const btns = document.querySelectorAll('.toast-btn.primary');const btn = btns[btns.length - 1];
+        if (btn) btn.click();
+    }
     const clipboardWrites = [];
     const openedUrls = [];
     const uiHistoryMessages = [
@@ -319,6 +328,7 @@ async function runUiSmokeTest(html) {
             window.fetch = mockFetch;
             window.EventSource = FakeEventSource;
             window.alert = (message) => alerts.push(String(message));
+            window.confirmToast = function(msg, cb) { if (cb) cb(); };
             window.confirm = () => true;
             window.open = (url) => openedUrls.push(String(url));
             window.localStorage.setItem('lan_server_url', 'http://127.0.0.1:18082');
@@ -371,15 +381,21 @@ async function runUiSmokeTest(html) {
         document.getElementById('maxStorageGbInput').value = '5';
         document.getElementById('autoCleanupEnabledInput').checked = false;
         document.getElementById('btnSaveStorage').click();
-        await waitForCondition(() => alerts.includes('存储策略已保存'));
+        await waitForCondition(() => getToastText().includes('存储策略已保存'));
         document.getElementById('btnCleanupAll').click();
-        await waitForCondition(() => alerts.some(message => message.includes('已清理 1 个文件')));
+        await waitForCondition(() => document.querySelector('.toast-btn.primary'));
+        clickToastConfirm();
+        await waitForCondition(() => getToastText().includes('已清理 1 个文件'));
 
         document.getElementById('btnClearFiles').click();
-        await waitForCondition(() => alerts.some(message => message.includes('已清理 2 个文件')));
+        await waitForCondition(() => document.querySelector('.toast-btn.primary'));
+        clickToastConfirm();
+        await waitForCondition(() => getToastText().includes('已清理 2 个文件'));
 
         document.getElementById('btnClearHistory').click();
-        await waitForCondition(() => alerts.some(message => message.includes('已清空 1 条聊天记录')));
+        await waitForCondition(() => document.querySelector('.toast-btn.primary'));
+        clickToastConfirm();
+        await waitForCondition(() => getToastText().includes('已清空 1 条聊天记录'));
         await waitForCondition(() => document.getElementById('messages').textContent.includes('记录已被清空'));
 
         assert(fetchCalls.includes('GET /api/server-info'), 'Connect API was not called');

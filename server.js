@@ -1151,7 +1151,7 @@ app.use(cors({
     credentials: true
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // Global socket optimization for LAN file transfers
 app.use((req, res, next) => {
@@ -1199,9 +1199,14 @@ const upload = multer({
     storage: storage,
     limits: { fileSize: MAX_FILE_SIZE }
 });
+const CHUNK_TMP_DIR = path.join(UPLOAD_SESSIONS_DIR, '_tmp');
+if (!fs.existsSync(CHUNK_TMP_DIR)) fs.mkdirSync(CHUNK_TMP_DIR, { recursive: true });
 const chunkUpload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: CHUNK_SIZE + 1024 * 1024 } // allow 1MB headroom per chunk
+    storage: multer.diskStorage({
+        destination: function (req, file, cb) { cb(null, CHUNK_TMP_DIR); },
+        filename: function (req, file, cb) { cb(null, crypto.randomBytes(16).toString('hex') + '.chunktmp'); }
+    }),
+    limits: { fileSize: CHUNK_SIZE + 1024 * 1024 }
 });
 
 // API Routes
@@ -1494,29 +1499,53 @@ app.post('/api/chat/upload/chunk', chunkUpload.single('chunk'), (req, res) => {
     const chunkIndex = Number(req.body && req.body.chunkIndex);
     const totalChunks = Number(req.body && req.body.totalChunks);
     const meta = loadUploadMeta(uploadKey);
+    const tmpPath = req.file && req.file.path ? req.file.path : null;
+
+    function cleanupTmp() {
+        if (tmpPath) { try { fs.unlinkSync(tmpPath); } catch (e) { /* ignore */ } }
+    }
 
     if (!meta) {
+        cleanupTmp();
         return res.status(404).json({ success: false, error: 'Upload session not found' });
     }
 
-    if (!req.file || !req.file.buffer) {
+    if (!req.file || !tmpPath) {
+        cleanupTmp();
         return res.status(400).json({ success: false, error: 'No chunk uploaded' });
     }
 
     if (!Number.isInteger(chunkIndex) || chunkIndex < 0 || chunkIndex >= meta.totalChunks) {
+        cleanupTmp();
         return res.status(400).json({ success: false, error: 'Invalid chunk index' });
     }
 
     if (!Number.isInteger(totalChunks) || totalChunks !== meta.totalChunks) {
+        cleanupTmp();
         return res.status(400).json({ success: false, error: 'Invalid total chunks' });
     }
 
     if (req.file.size !== getExpectedChunkSize(meta, chunkIndex)) {
+        cleanupTmp();
         return res.status(400).json({ success: false, error: 'Invalid chunk size' });
     }
 
     ensureUploadSessionDir(uploadKey);
-    fs.writeFileSync(getChunkPath(uploadKey, chunkIndex), req.file.buffer);
+    const chunkDest = getChunkPath(uploadKey, chunkIndex);
+    try {
+        try { fs.unlinkSync(chunkDest); } catch (e) { /* ignore if not exists */ }
+        fs.renameSync(tmpPath, chunkDest);
+    } catch (e) {
+        try {
+            const data = fs.readFileSync(tmpPath);
+            fs.writeFileSync(chunkDest, data);
+            fs.unlinkSync(tmpPath);
+        } catch (e2) {
+            cleanupTmp();
+            console.error('Failed to persist chunk:', uploadKey, chunkIndex, e2);
+            return res.status(500).json({ success: false, error: 'Failed to store chunk' });
+        }
+    }
     meta.updatedAt = new Date().toISOString();
     saveUploadMeta(uploadKey, meta);
 
@@ -1736,6 +1765,26 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(PROJECT_ROOT, '轻量局域网快传.html'));
 });
 
+
+// 404 handler for unmatched API routes
+app.use('/api', (req, res) => {
+    res.status(404).json({ success: false, error: 'Endpoint not found' });
+});
+
+// Global error handler - catches sync/async errors from all routes
+app.use((err, req, res, next) => {
+    if (err && err.type === 'entity.too.large') {
+        return res.status(413).json({ success: false, error: 'Request body too large' });
+    }
+    if (err && err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ success: false, error: 'File size exceeds limit' });
+    }
+    console.error('Unhandled request error:', err);
+    if (!res.headersSent) {
+        res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
 let server = null;
 
 async function startServer() {
@@ -1791,20 +1840,42 @@ async function startServer() {
     });
 }
 
-function shutdown() {
+let isShuttingDown = false;
+
+function shutdown(signal) {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    console.log(`
+${signal || 'Shutting down'}: closing connections...`);
     removeStatusFile();
+
+    // Close all SSE clients immediately
+    for (const client of sseClients) {
+        try { client.res.end(); } catch (e) { /* ignore */ }
+    }
+    sseClients.clear();
+
+    if (server && server.listening) {
+        server.close(() => {
+            process.exit(0);
+        });
+        // Force exit after 5s if connections hang
+        setTimeout(() => process.exit(0), 5000).unref();
+    } else {
+        process.exit(0);
+    }
 }
 
-process.on('SIGINT', () => {
-    shutdown();
-    process.exit(0);
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+// Prevent crashes from killing the server on unexpected errors
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught exception:', err);
 });
 
-process.on('SIGTERM', () => {
-    shutdown();
-    process.exit(0);
+process.on('unhandledRejection', (reason) => {
+    console.error('Unhandled rejection:', reason);
 });
-
-process.on('exit', shutdown);
 
 startServer();

@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-07-13
+
+### Added
+
+- Enterprise dark-mode UI with light theme toggle (persisted in localStorage)
+- Sidebar navigation layout replacing header button bar
+- Toast notification system replacing all alert/confirm dialogs
+- Responsive design with mobile breakpoints (sidebar hidden, compact layout)
+- Incremental message rendering (no full re-render on each SSE event)
+
+### Changed
+
+- Server: chunk uploads now use disk storage instead of memory (multer.diskStorage)
+- Server: express.json body limit set to 10MB
+- Server: graceful shutdown closes SSE clients and HTTP server
+- Server: global error handler catches unhandled route errors
+- Server: 404 handler for unmatched API endpoints
+- Server: process-level uncaughtException/unhandledRejection guards
+
+### Fixed
+
+- Memory pressure on large multi-file uploads (chunks no longer buffered in RAM)
+- Server crash on unhandled promise rejection or uncaught exception
+- Stale connections on shutdown (SSE clients now properly closed)
+
 ## [1.1.0] - 2026-07-12
 
 ### Added

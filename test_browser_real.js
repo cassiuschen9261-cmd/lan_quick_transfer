@@ -101,16 +101,36 @@ async function waitForPageText(page, selector, expectedText, timeoutMs = 10000) 
     );
 }
 
-async function waitForDialogMessage(dialogs, matcher, timeoutMs = 10000) {
-    const startedAt = Date.now();
-    while (Date.now() - startedAt < timeoutMs) {
-        if (dialogs.some(dialog => matcher(dialog.message))) {
-            return;
+async function waitForToast(page, matcher, timeoutMs = 10000) {
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < timeoutMs) {
+            const text = await page.evaluate(() => {
+                const c = document.getElementById('toastContainer');
+                return c ? c.textContent : '';
+            });
+            if (matcher(text)) return;
+            await wait(100);
         }
-        await wait(100);
+        throw new Error('Timed out waiting for toast message');
     }
-    throw new Error('Timed out waiting for browser dialog');
-}
+
+    async function clickToastConfirm(page) {
+        await page.evaluate(() => {
+            const btns = document.querySelectorAll('.toast-btn.primary');
+            const btn = btns[btns.length - 1];
+            if (btn) btn.click();
+        });
+    }
+
+    async function waitForToastConfirmButton(page, timeoutMs = 10000) {
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < timeoutMs) {
+            const exists = await page.evaluate(() => !!document.querySelector('.toast-btn.primary'));
+            if (exists) return;
+            await wait(100);
+        }
+        throw new Error('Timed out waiting for toast confirm button');
+    }
 
 async function createClientContext(browser, clientName, displayName) {
     const context = await browser.newContext({
@@ -219,7 +239,9 @@ async function main() {
         ]);
 
         await clientA.page.click('#btnClearHistory');
-        await waitForDialogMessage(clientA.dialogs, message => message.includes('已清空 1 条聊天记录'));
+        await waitForToastConfirmButton(clientA.page);
+        await clickToastConfirm(clientA.page);
+        await waitForToast(clientA.page, text => text.includes('已清空 1 条聊天记录'));
         await Promise.all([
             waitForPageText(clientA.page, '#messages', '记录已被清空'),
             waitForPageText(clientB.page, '#messages', '记录已被清空')
@@ -252,7 +274,7 @@ async function main() {
         await clientA.page.fill('#maxStorageGbInput', '2');
         await clientA.page.uncheck('#autoCleanupEnabledInput');
         await clientA.page.click('#btnSaveStorage');
-        await waitForDialogMessage(clientA.dialogs, message => message.includes('存储策略已保存'));
+        await waitForToast(clientA.page, text => text.includes('存储策略已保存'));
 
         await clientB.page.click('#btnOpenStorage');
         await clientB.page.waitForFunction(
@@ -404,7 +426,9 @@ async function main() {
         );
 
         await clientA.page.click('#btnClearFiles');
-        await waitForDialogMessage(clientA.dialogs, message => message.includes('已清理'));
+        await waitForToastConfirmButton(clientA.page);
+        await clickToastConfirm(clientA.page);
+        await waitForToast(clientA.page, text => text.includes('已清理'));
         await clientB.page.waitForFunction(
             (name) => !document.getElementById('messages').textContent.includes(name),
             uploadedFileName,
