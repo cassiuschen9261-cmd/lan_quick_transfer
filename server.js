@@ -23,12 +23,15 @@ const DEFAULT_PORT = 18082;
 const RESERVED_PORTS = new Set([18080, 18081]);
 const AUTO_PORT_SCAN_LIMIT = 50;
 const PROJECT_ROOT = __dirname;
+// When installed to Program Files, use %LOCALAPPDATA% for writable data
+const APP_DATA_DIR = path.join(process.env.LOCALAPPDATA || process.env.APPDATA || PROJECT_ROOT, 'LAN Quick Transfer');
+const isWritableRoot = PROJECT_ROOT.toLowerCase().includes('program files');
 const UPLOADS_DIR = process.env.LAN_QT_UPLOADS_DIR
     ? path.resolve(process.env.LAN_QT_UPLOADS_DIR)
-    : path.join(PROJECT_ROOT, 'uploads');
+    : isWritableRoot ? path.join(APP_DATA_DIR, 'uploads') : path.join(PROJECT_ROOT, 'uploads');
 const DATA_DIR = process.env.LAN_QT_DATA_DIR
     ? path.resolve(process.env.LAN_QT_DATA_DIR)
-    : path.join(PROJECT_ROOT, 'data');
+    : isWritableRoot ? path.join(APP_DATA_DIR, 'data') : path.join(PROJECT_ROOT, 'data');
 const HISTORY_FILE = path.join(DATA_DIR, 'chat_history.json');
 const CONFIG_FILE = path.join(DATA_DIR, 'server-config.json');
 const STATUS_FILE = path.join(DATA_DIR, 'server-status.json');
@@ -1762,7 +1765,7 @@ app.get('/api/events', (req, res) => {
 
 // Serve HTML
 app.get('/', (req, res) => {
-    res.sendFile(path.join(PROJECT_ROOT, '轻量局域网快传.html'));
+    res.sendFile(path.join(PROJECT_ROOT, 'index.html'));
 });
 
 

@@ -425,7 +425,7 @@ async function main() {
     const uploadsDir = path.join(tempRoot, 'uploads');
     const statusPath = path.join(dataDir, 'server-status.json');
     const configPath = path.join(dataDir, 'server-config.json');
-    const htmlPath = path.join(__dirname, '轻量局域网快传.html');
+    const htmlPath = path.join(__dirname, 'index.html');
     const html = await fsp.readFile(htmlPath, 'utf8');
     const testMarker = `REGRESSION_${Date.now()}`;
     let child = null;

@@ -1,0 +1,3162 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>轻量局域网快传</title>
+    <style>
+        :root {
+            --bg: #0f1117;
+            --bg-elev: #181b24;
+            --bg-elev-2: #1e2230;
+            --border: #2a2f3d;
+            --border-soft: #232838;
+            --text: #e4e7ee;
+            --text-muted: #8b92a5;
+            --text-dim: #646b80;
+            --primary: #5b8def;
+            --primary-hover: #7aa3f5;
+            --primary-soft: rgba(91, 141, 239, 0.12);
+            --accent: #3ddc97;
+            --accent-soft: rgba(61, 220, 151, 0.12);
+            --danger: #ef5a6f;
+            --danger-soft: rgba(239, 90, 111, 0.12);
+            --warning: #f0b86e;
+            --warning-soft: rgba(240, 184, 110, 0.12);
+            --radius: 10px;
+            --radius-sm: 6px;
+            --radius-lg: 14px;
+            --shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+            --sidebar-w: 60px;
+            --transition: 0.18s ease;
+        }
+
+        [data-theme="light"] {
+            --bg: #f4f5f8;
+            --bg-elev: #ffffff;
+            --bg-elev-2: #f0f2f6;
+            --border: #dde0e8;
+            --border-soft: #e8eaf0;
+            --text: #1a1d28;
+            --text-muted: #5d6478;
+            --text-dim: #9499a8;
+            --primary: #3b6fd4;
+            --primary-hover: #2d5ab8;
+            --primary-soft: rgba(59, 111, 212, 0.08);
+            --accent: #1ba87a;
+            --accent-soft: rgba(27, 168, 122, 0.1);
+            --danger: #d63a52;
+            --danger-soft: rgba(214, 58, 82, 0.08);
+            --warning: #d4920f;
+            --warning-soft: rgba(212, 146, 15, 0.1);
+            --shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 6px 24px rgba(0, 0, 0, 0.1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+        }
+
+        button { font-family: inherit; }
+
+        /* Sidebar */
+        .sidebar {
+            width: var(--sidebar-w);
+            background: var(--bg-elev);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 0;
+            gap: 4px;
+            flex-shrink: 0;
+            z-index: 50;
+        }
+        .sidebar-logo {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-sm);
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+        .sidebar-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-sm);
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            transition: var(--transition);
+            position: relative;
+        }
+        .sidebar-btn:hover {
+            background: var(--bg-elev-2);
+            color: var(--text);
+        }
+        .sidebar-btn.active {
+            background: var(--primary-soft);
+            color: var(--primary);
+        }
+        .sidebar-btn .tooltip {
+            position: absolute;
+            left: calc(100% + 8px);
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--bg-elev-2);
+            color: var(--text);
+            padding: 4px 10px;
+            border-radius: var(--radius-sm);
+            font-size: 0.8rem;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s;
+            border: 1px solid var(--border);
+            z-index: 100;
+        }
+        .sidebar-btn:hover .tooltip { opacity: 1; }
+        .sidebar-spacer { flex: 1; }
+
+        /* Main area */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            height: 100vh;
+        }
+
+        /* Top bar */
+        .topbar {
+            height: 52px;
+            background: var(--bg-elev);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 16px;
+            flex-shrink: 0;
+        }
+        .topbar-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text);
+            white-space: nowrap;
+        }
+        .topbar-title .sub {
+            color: var(--text-dim);
+            font-weight: 400;
+            font-size: 0.82rem;
+            margin-left: 8px;
+        }
+        .topbar-actions {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .topbar-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            padding: 5px 12px;
+            background: var(--bg-elev-2);
+            border-radius: var(--radius-sm);
+        }
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--accent);
+            flex-shrink: 0;
+        }
+        .status-dot.offline { background: var(--danger); }
+
+        .icon-btn {
+            width: 34px;
+            height: 34px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: var(--bg-elev-2);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+        .icon-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        .icon-btn svg { width: 16px; height: 16px; }
+
+        .pill-btn {
+            padding: 6px 14px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: var(--bg-elev-2);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.82rem;
+            white-space: nowrap;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .pill-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        .pill-btn.danger:hover {
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+        .pill-btn.active {
+            background: var(--primary-soft);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        /* Quick share bar */
+        .quick-share-bar {
+            padding: 8px 20px;
+            background: var(--bg-elev-2);
+            border-bottom: 1px solid var(--border);
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+        .quick-share-bar.active { display: flex; }
+        .quick-share-url {
+            color: var(--primary);
+            font-weight: 500;
+            word-break: break-all;
+        }
+
+        /* Filter bar */
+        .filter-bar {
+            display: flex;
+            gap: 8px;
+            padding: 8px 20px;
+            background: var(--bg-elev);
+            border-bottom: 1px solid var(--border-soft);
+            align-items: center;
+            flex-wrap: wrap;
+            flex-shrink: 0;
+        }
+        .filter-input {
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 6px 10px;
+            font-size: 0.82rem;
+            outline: none;
+            background: var(--bg);
+            color: var(--text);
+            transition: var(--transition);
+        }
+        .filter-input:focus {
+            border-color: var(--primary);
+        }
+        .filter-input::placeholder { color: var(--text-dim); }
+
+        /* Chat area */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg);
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        .messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            min-height: 0;
+        }
+        .messages::-webkit-scrollbar { width: 6px; }
+        .messages::-webkit-scrollbar-track { background: transparent; }
+        .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        .msg {
+            display: flex;
+            flex-direction: column;
+            max-width: 72%;
+            animation: fadeIn 0.2s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .msg.self { align-self: flex-end; }
+        .msg.other { align-self: flex-start; }
+
+        .msg-meta {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+            margin-left: 6px;
+            margin-right: 6px;
+        }
+        .msg.self .msg-meta { text-align: right; }
+
+        .msg-bubble {
+            padding: 10px 14px;
+            border-radius: var(--radius);
+            font-size: 0.88rem;
+            line-height: 1.55;
+            word-break: break-word;
+        }
+        .msg.self .msg-bubble {
+            background: var(--primary);
+            color: #fff;
+            border-bottom-right-radius: 3px;
+        }
+        .msg.other .msg-bubble {
+            background: var(--bg-elev);
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 3px;
+        }
+
+        /* Input area */
+        .input-area {
+            padding: 12px 20px;
+            background: var(--bg-elev);
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .input-wrapper {
+            flex: 1;
+            display: flex;
+            background: var(--bg);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            transition: var(--transition);
+            padding: 3px;
+            align-items: center;
+        }
+        .input-wrapper:focus-within {
+            border-color: var(--primary);
+        }
+        .input-box {
+            flex: 1;
+            padding: 9px 12px;
+            border: none;
+            background: transparent;
+            font-size: 0.88rem;
+            outline: none;
+            font-family: inherit;
+            color: var(--text);
+        }
+        .input-box::placeholder { color: var(--text-dim); }
+        .expire-select {
+            border: none;
+            background: var(--bg-elev-2);
+            color: var(--text-muted);
+            border-radius: var(--radius-sm);
+            padding: 6px 8px;
+            font-size: 0.78rem;
+            outline: none;
+            max-width: 120px;
+            cursor: pointer;
+        }
+        .upload-btn, .folder-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 8px;
+            font-size: 1.05rem;
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .upload-btn:hover, .folder-btn:hover {
+            background: var(--bg-elev-2);
+            color: var(--primary);
+        }
+
+        .send-btn {
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            padding: 9px 18px;
+            border-radius: var(--radius);
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .send-btn:hover { background: var(--primary-hover); }
+        .send-btn:disabled {
+            background: var(--text-dim);
+            cursor: not-allowed;
+        }
+        .send-btn svg { width: 15px; height: 15px; }
+
+        /* Upload/download panels */
+        .upload-status, .download-status {
+            padding: 0 20px 10px;
+            background: var(--bg-elev);
+            border-top: 1px solid var(--border-soft);
+            display: none;
+            flex-shrink: 0;
+        }
+        .upload-status.active, .download-status.active { display: block; }
+        .upload-status-text {
+            font-size: 0.82rem;
+            color: var(--text);
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+        .upload-status-meta {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 6px;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .upload-progress-track {
+            height: 4px;
+            background: var(--bg-elev-2);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .upload-progress-fill {
+            width: 0%;
+            height: 100%;
+            background: var(--primary);
+            transition: width 0.2s ease;
+        }
+        .upload-task-list, .download-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .upload-task-item, .download-item {
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--bg-elev-2);
+        }
+        .upload-task-item.error, .download-item.error {
+            border-color: var(--danger);
+            background: var(--danger-soft);
+        }
+        .upload-task-item.done, .download-item.done {
+            border-color: var(--accent);
+            background: var(--accent-soft);
+        }
+        .download-item.paused { border-color: var(--warning); background: var(--warning-soft); }
+        .upload-task-top, .download-item-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: flex-start;
+            margin-bottom: 6px;
+        }
+        .upload-task-name, .download-item-name {
+            font-size: 0.82rem;
+            font-weight: 500;
+            color: var(--text);
+            word-break: break-all;
+        }
+        .upload-task-meta, .download-item-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+        .upload-task-state, .download-item-state {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .upload-task-item.error .upload-task-state, .download-item.error .download-item-state { color: var(--danger); }
+        .upload-task-item.done .upload-task-state, .download-item.done .download-item-state { color: var(--accent); }
+        .download-item.paused .download-item-state { color: var(--warning); }
+        .download-item-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            margin-top: 6px;
+        }
+        .download-action-btn {
+            border: 1px solid var(--border);
+            background: var(--bg-elev);
+            color: var(--text-muted);
+            border-radius: var(--radius-sm);
+            padding: 3px 8px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .download-action-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .download-action-btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+        .download-status-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+        }
+        .download-status-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+        .small-btn {
+            padding: 4px 10px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: var(--bg-elev-2);
+            color: var(--text-muted);
+            cursor: pointer;
+            white-space: nowrap;
+            font-size: 0.78rem;
+            transition: var(--transition);
+        }
+        .small-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+        /* File attachments */
+        .chat-image {
+            max-width: 260px;
+            max-height: 260px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            border: 1px solid var(--border);
+            transition: transform 0.15s;
+        }
+        .chat-image:hover { transform: scale(1.02); }
+        .chat-file-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: var(--radius-sm);
+            text-decoration: none;
+            color: var(--primary);
+            font-weight: 500;
+            font-size: 0.85rem;
+            border: 1px solid var(--border);
+            transition: var(--transition);
+        }
+        .msg.self .chat-file-link {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+        .chat-file-link:hover { background: var(--bg-elev-2); }
+        .msg.self .chat-file-link:hover { background: rgba(255, 255, 255, 0.25); }
+        .file-icon { font-size: 1.2rem; }
+        .file-expire-tip {
+            margin-top: 4px;
+            font-size: 0.72rem;
+            opacity: 0.7;
+        }
+        .batch-file-check { margin-right: 6px; transform: translateY(1px); cursor: pointer; }
+
+        /* Drag overlay */
+        .drag-overlay {
+            position: absolute;
+            inset: 0;
+            background: var(--bg);
+            opacity: 0.92;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            border: 2px dashed var(--primary);
+            border-radius: var(--radius);
+        }
+        .drag-overlay.active { display: flex; }
+        .drag-text {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--primary);
+            pointer-events: none;
+        }
+
+        /* Modals */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: var(--bg-elev);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            width: 90%;
+            max-width: 420px;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal.large { max-width: 620px; }
+        .modal h3 {
+            margin-bottom: 14px;
+            color: var(--text);
+            font-size: 1.05rem;
+            font-weight: 600;
+        }
+        .modal p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 14px;
+            line-height: 1.5;
+        }
+        .modal input[type="text"], .modal input[type="number"] {
+            width: 100%;
+            padding: 9px 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            margin-bottom: 16px;
+            font-size: 0.88rem;
+            outline: none;
+            background: var(--bg);
+            color: var(--text);
+        }
+        .modal input:focus { border-color: var(--primary); }
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        .modal-actions button {
+            padding: 7px 16px;
+            border-radius: var(--radius-sm);
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.85rem;
+            transition: var(--transition);
+        }
+        .btn-cancel {
+            background: var(--bg-elev-2);
+            color: var(--text);
+            border: 1px solid var(--border) !important;
+        }
+        .btn-cancel:hover { background: var(--bg); }
+        .btn-save {
+            background: var(--primary);
+            color: #fff;
+        }
+        .btn-save:hover { background: var(--primary-hover); }
+
+        .device-list { max-height: 320px; overflow-y: auto; margin-bottom: 14px; }
+        .connect-layout { display: grid; grid-template-columns: 200px 1fr; gap: 14px; align-items: start; }
+        .qr-panel { text-align: center; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev-2); }
+        .qr-image { width: 170px; height: 170px; object-fit: contain; border-radius: var(--radius-sm); background: #fff; padding: 6px; }
+        .qr-tip { margin-top: 8px; font-size: 0.78rem; color: var(--text-muted); word-break: break-all; }
+        .connect-section-title { font-size: 0.85rem; font-weight: 600; margin: 2px 0 8px; color: var(--text); }
+        .url-card, .online-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; background: var(--bg-elev-2); margin-bottom: 10px; }
+        .url-row, .online-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+        .url-row:last-child, .online-row:last-child { border-bottom: none; }
+        .url-main, .online-main { word-break: break-all; font-size: 0.85rem; }
+        .url-badge, .online-badge { display: inline-block; margin-top: 3px; font-size: 0.72rem; color: var(--primary); background: var(--primary-soft); padding: 2px 7px; border-radius: 999px; }
+        .device-row { display: grid; grid-template-columns: 1.2fr 1fr auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+        .device-row:last-child { border-bottom: none; }
+        .device-ip { font-weight: 600; color: var(--text); font-size: 0.88rem; }
+        .device-extra { font-size: 0.78rem; color: var(--text-muted); margin-top: 3px; word-break: break-word; }
+        .device-alias-input { margin-bottom: 0 !important; }
+
+        .storage-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+        .storage-card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev-2); padding: 12px; }
+        .storage-label { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px; }
+        .storage-value { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+        .storage-subtext { margin-top: 4px; font-size: 0.74rem; color: var(--text-muted); }
+        .storage-details { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev-2); padding: 12px; margin-bottom: 14px; }
+        .storage-row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.82rem; }
+        .storage-row:last-child { border-bottom: none; }
+        .storage-form { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev-2); padding: 12px; margin-bottom: 14px; }
+        .storage-form label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--text); margin-bottom: 5px; }
+        .storage-form input[type="number"] { margin-bottom: 10px; }
+        .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+        .checkbox-row input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--primary); }
+        .storage-inline-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+        .empty-state {
+            padding: 16px;
+            text-align: center;
+            color: var(--text-muted);
+            background: var(--bg-elev-2);
+            border-radius: var(--radius);
+            border: 1px dashed var(--border);
+            font-size: 0.85rem;
+        }
+
+        /* Lightbox */
+        .lightbox {
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 12, 18, 0.92);
+            z-index: 3000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .lightbox.active { display: flex; }
+        .lightbox-image { max-width: min(90vw, 1200px); max-height: 76vh; border-radius: var(--radius); }
+        .lightbox-actions { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+        .lightbox-btn {
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border-radius: var(--radius-sm);
+            padding: 7px 12px;
+            cursor: pointer;
+            font-size: 0.82rem;
+            transition: var(--transition);
+        }
+        .lightbox-btn:hover { background: rgba(255, 255, 255, 0.2); }
+
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 5000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+        .toast {
+            min-width: 280px;
+            max-width: 400px;
+            padding: 12px 16px;
+            border-radius: var(--radius);
+            background: var(--bg-elev);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: 0.85rem;
+            color: var(--text);
+            pointer-events: auto;
+            animation: toastIn 0.2s ease;
+            border-left: 3px solid var(--primary);
+        }
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .toast.success { border-left-color: var(--accent); }
+        .toast.error { border-left-color: var(--danger); }
+        .toast.warning { border-left-color: var(--warning); }
+        .toast-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+        .toast-body { flex: 1; }
+        .toast-title { font-weight: 600; margin-bottom: 2px; }
+        .toast-msg { color: var(--text-muted); font-size: 0.8rem; }
+        .toast-actions { display: flex; gap: 6px; margin-top: 6px; }
+        .toast-btn {
+            padding: 4px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: var(--bg-elev-2);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.78rem;
+            transition: var(--transition);
+        }
+        .toast-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .toast-btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .toast-btn.primary:hover { background: var(--primary-hover); }
+        .toast-btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+        .toast-close {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 1.1rem;
+            padding: 0;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+        .toast-close:hover { color: var(--text); }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .topbar { padding: 0 12px; gap: 8px; }
+            .topbar-title .sub { display: none; }
+            .messages { padding: 12px; }
+            .input-area { padding: 10px 12px; }
+            .filter-bar { padding: 8px 12px; }
+            .upload-status, .download-status { padding: 0 12px 8px; }
+            .msg { max-width: 90%; }
+            .connect-layout { grid-template-columns: 1fr; }
+            .qr-image { width: 140px; height: 140px; }
+            .modal { width: 95%; padding: 18px; }
+            .pill-btn { padding: 5px 10px; font-size: 0.78rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="modal-overlay" id="configModal">
+        <div class="modal">
+            <h3>配置服务器地址</h3>
+            <p>由于您当前通过双击文件直接打开，需要配置局域网服务器地址才能进行通讯。例如：<code>http://192.168.1.8:18082</code></p>
+            <input type="text" id="serverUrlInput" placeholder="请输入带有端口号的 http 地址">
+            <div class="modal-actions">
+                <button class="btn-cancel" id="btnCancelConfig">取消</button>
+                <button class="btn-save" id="btnSaveConfig">保存并连接</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="deviceModal">
+        <div class="modal large">
+            <h3>设备备注</h3>
+            <p>根据 IP 为局域网内设备设置备注，消息中会显示为"备注 [IP]"，方便分辨是哪台电脑发送的。</p>
+            <div class="device-list" id="deviceList">
+                <div class="empty-state">正在加载设备列表...</div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" id="btnCloseDevices">关闭</button>
+                <button class="btn-save" id="btnRefreshDevices">刷新列表</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="connectModal">
+        <div class="modal large">
+            <h3>快速连接</h3>
+            <p>这里集中显示可用连接地址、二维码和当前在线设备。手机或其他电脑可直接扫码或复制地址访问。</p>
+            <div class="connect-layout">
+                <div class="qr-panel">
+                    <img id="connectQrImage" class="qr-image" alt="连接二维码">
+                    <div class="qr-tip" id="connectQrTip">请使用手机或其他设备扫码访问</div>
+                </div>
+                <div>
+                    <div class="url-card">
+                        <div class="connect-section-title">可用连接地址</div>
+                        <div id="connectUrlList">
+                            <div class="empty-state">正在加载地址...</div>
+                        </div>
+                    </div>
+                    <div class="online-card">
+                        <div class="connect-section-title">自动发现的在线设备</div>
+                        <div id="onlineDeviceList">
+                            <div class="empty-state">正在加载在线设备...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" id="btnCloseConnect">关闭</button>
+                <button class="btn-cancel" id="btnCopyAllConnect">复制全部地址</button>
+                <button class="btn-save" id="btnRefreshConnect">刷新连接信息</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="storageModal">
+        <div class="modal large">
+            <h3>存储管理</h3>
+            <p>查看当前快传占用，支持按天清理、按容量上限自动清理，并可手动立即执行清理。</p>
+            <div class="storage-grid" id="storageSummary">
+                <div class="storage-card"><div class="storage-label">加载中</div><div class="storage-value">--</div></div>
+            </div>
+            <div class="storage-details" id="storageDetails">
+                <div class="empty-state">正在读取存储详情...</div>
+            </div>
+            <div class="storage-form">
+                <label for="retentionDaysInput">按天清理</label>
+                <input type="number" id="retentionDaysInput" min="0" step="1" placeholder="例如 30，填 0 表示关闭">
+                <label for="maxStorageGbInput">容量上限（GB）</label>
+                <input type="number" id="maxStorageGbInput" min="0" step="0.1" placeholder="例如 10，填 0 表示关闭">
+                <div class="checkbox-row">
+                    <input type="checkbox" id="autoCleanupEnabledInput">
+                    <label for="autoCleanupEnabledInput" style="margin-bottom:0;">启用自动清理</label>
+                </div>
+                <div class="storage-inline-actions">
+                    <button class="small-btn" id="btnCleanupRetention">立即按天清理</button>
+                    <button class="small-btn" id="btnCleanupAll">立即执行自动清理</button>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" id="btnCloseStorage">关闭</button>
+                <button class="btn-cancel" id="btnRefreshStorage">刷新统计</button>
+                <button class="btn-save" id="btnSaveStorage">保存策略</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <div class="sidebar-logo">⚡</div>
+        <button class="sidebar-btn" id="btnOpenConnect">
+            📱<span class="tooltip">快速连接</span>
+        </button>
+        <button class="sidebar-btn" id="btnOpenDevices">
+            🖥️<span class="tooltip">设备备注</span>
+        </button>
+        <button class="sidebar-btn" id="btnOpenStorage">
+            🗄️<span class="tooltip">存储管理</span>
+        </button>
+        <button class="sidebar-btn" id="btnBatchDownload">
+            📦<span class="tooltip">打包所选</span>
+        </button>
+        <button class="sidebar-btn" id="btnSendClipboard">
+            📋<span class="tooltip">发送剪贴板</span>
+        </button>
+        <div class="sidebar-spacer"></div>
+        <button class="sidebar-btn" id="btnToggleTheme">
+            🌓<span class="tooltip">切换主题</span>
+        </button>
+        <button class="sidebar-btn danger-btn" id="btnClearHistory">
+            🧹<span class="tooltip">清空记录</span>
+        </button>
+        <button class="sidebar-btn danger-btn" id="btnClearFiles">
+            🗑️<span class="tooltip">清理文件</span>
+        </button>
+        <button class="sidebar-btn" id="btnOpenConfig">
+            ⚙️<span class="tooltip">配置</span>
+        </button>
+    </div>
+
+    <div class="main">
+        <div class="topbar">
+            <div class="topbar-title">
+                局域网快传 <span class="sub">LAN Quick Transfer</span>
+            </div>
+            <div class="topbar-actions">
+                <div class="topbar-status">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="onlineCount">连接中...</span>
+                </div>
+            </div>
+        </div>
+        <div class="quick-share-bar" id="quickShareBar">
+            <div>推荐访问地址：<span class="quick-share-url" id="quickShareUrl">正在获取...</span></div>
+            <button class="small-btn" id="btnCopyQuickShare">复制地址</button>
+        </div>
+        <div class="filter-bar">
+            <input type="search" id="fileSearchInput" class="filter-input" placeholder="搜索文件名或消息">
+            <input type="search" id="deviceFilterInput" class="filter-input" placeholder="按设备筛选">
+            <input type="date" id="dateFilterInput" class="filter-input">
+            <button class="small-btn" id="btnClearFilters">清除筛选</button>
+            <button class="small-btn" id="btnSendClipboard">发送剪贴板</button>
+        </div>
+        
+        <div class="chat-area" id="dropZone">
+            <div class="drag-overlay" id="dragOverlay">
+                <div class="drag-text">📥 松开鼠标上传文件或多文件</div>
+            </div>
+
+            <div class="messages" id="messages">
+                <div class="empty-state" style="text-align:center; border:none; background:none;">
+                    连接成功，现在可以跨设备发送文字或文件了。<br>
+                    直接拖拽文件到窗口即可上传，中文文件名不会乱码。
+                </div>
+            </div>
+            
+            <div class="input-area">
+                <div class="input-wrapper">
+                    <button id="uploadBtn" class="upload-btn" title="发送文件或图片">📎</button>
+                    <button id="folderBtn" class="folder-btn" title="发送文件夹">📁</button>
+                    <input type="file" id="fileInput" style="display: none;" multiple>
+                    <input type="file" id="folderInput" style="display: none;" webkitdirectory directory multiple>
+                    <select id="fileExpireSelect" class="expire-select" title="上传文件保留时间">
+                        <option value="never">永久保留</option>
+                        <option value="1h">1 小时后过期</option>
+                        <option value="1d">1 天后过期</option>
+                        <option value="7d">7 天后过期</option>
+                    </select>
+                    <input type="text" id="chatInput" class="input-box" placeholder="输入消息，或直接拖拽文件到此处 (Enter 发送)...">
+                </div>
+                <button id="sendBtn" class="send-btn">
+                    <span>发送</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </button>
+            </div>
+            <div class="upload-status" id="uploadStatus">
+                <div class="upload-status-text" id="uploadStatusText">准备上传...</div>
+                <div class="upload-progress-track">
+                    <div class="upload-progress-fill" id="uploadProgressFill"></div>
+                </div>
+                <div class="upload-status-meta" id="uploadStatusMeta">
+                    <span>速度 --</span>
+                    <span>剩余 --</span>
+                </div>
+                <div class="upload-task-list" id="uploadTaskList"></div>
+            </div>
+            <div class="download-status" id="downloadStatus">
+                <div class="download-status-header">
+                    <div class="upload-status-text">下载任务</div>
+                    <div class="download-status-actions">
+                        <button class="small-btn" id="btnPauseAllDownloads">全部暂停</button>
+                        <button class="small-btn" id="btnResumeAllDownloads">全部继续</button>
+                        <button class="small-btn" id="btnDeleteAllDownloads">全部删除</button>
+                    </div>
+                </div>
+                <div class="download-list" id="downloadList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="lightbox" id="imageLightbox">
+        <img class="lightbox-image" id="lightboxImage" alt="图片预览">
+        <div class="lightbox-actions">
+            <button class="lightbox-btn" id="btnLightboxPrev">上一张</button>
+            <button class="lightbox-btn" id="btnLightboxNext">下一张</button>
+            <button class="lightbox-btn" id="btnLightboxCopy">复制图片</button>
+            <button class="lightbox-btn" id="btnLightboxDownload">下载原图</button>
+            <button class="lightbox-btn" id="btnLightboxClose">关闭</button>
+        </div>
+    </div>
+        <script>
+        // ===== Toast notification system =====
+        const toastContainer = document.getElementById('toastContainer');
+        let toastIdCounter = 0;
+        const activeToasts = new Map();
+
+        function showToast(options) {
+            if (typeof options === 'string') options = { message: options };
+            const id = ++toastIdCounter;
+            const type = options.type || 'info';
+            const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.id = `toast_${id}`;
+            const actionsHtml = options.actions ? `<div class="toast-actions">${options.actions.map((a, i) => `<button class="toast-btn ${a.primary ? 'primary' : ''} ${a.danger ? 'danger' : ''}" data-toast-action="${i}">${escapeHtml(a.label)}</button>`).join('')}</div>` : '';
+            toast.innerHTML = `
+                <span class="toast-icon">${icons[type] || icons.info}</span>
+                <div class="toast-body">
+                    ${options.title ? `<div class="toast-title">${escapeHtml(options.title)}</div>` : ''}
+                    <div class="toast-msg">${escapeHtml(options.message || '')}</div>
+                    ${actionsHtml}
+                </div>
+                ${options.duration !== 0 ? `<button class="toast-close">×</button>` : ''}
+            `;
+            toastContainer.appendChild(toast);
+            activeToasts.set(id, { el: toast, resolve: null });
+
+            if (options.actions) {
+                toast.querySelectorAll('[data-toast-action]').forEach((btn, i) => {
+                    btn.addEventListener('click', () => {
+                        if (options.actions[i].onClick) options.actions[i].onClick();
+                        dismissToast(id);
+                    });
+                });
+            }
+            const closeBtn = toast.querySelector('.toast-close');
+            if (closeBtn) closeBtn.addEventListener('click', () => dismissToast(id));
+
+            const duration = options.duration !== undefined ? options.duration : (type === 'error' ? 6000 : 3500);
+            if (duration > 0) {
+                setTimeout(() => dismissToast(id), duration);
+            }
+            return id;
+        }
+
+        function dismissToast(id) {
+            const entry = activeToasts.get(id);
+            if (!entry) return;
+            entry.el.style.opacity = '0';
+            entry.el.style.transform = 'translateX(20px)';
+            entry.el.style.transition = 'opacity 0.2s, transform 0.2s';
+            setTimeout(() => { entry.el.remove(); activeToasts.delete(id); }, 200);
+        }
+
+        function confirmToast(message, onConfirm, options = {}) {
+            return showToast({
+                type: 'warning',
+                title: options.title || '请确认',
+                message,
+                duration: 0,
+                actions: [
+                    { label: options.cancelLabel || '取消' },
+                    { label: options.confirmLabel || '确认', primary: true, onClick: onConfirm }
+                ]
+            });
+        }
+
+        function alertToast(message, type = 'info', title) {
+            return showToast({ type, message, title, duration: type === 'error' ? 6000 : 3500 });
+        }
+
+        // ===== Theme management =====
+        function getStoredTheme() {
+            return localStorage.getItem('lan_qt_theme') || 'dark';
+        }
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('lan_qt_theme', theme);
+        }
+        applyTheme(getStoredTheme());
+        let currentSession = null;
+        let eventSource = null;
+        let knownDevices = [];
+        let serverInfo = null;
+        let storageInfo = null;
+        let isUploadingBatch = false;
+        let uploadTaskId = 0;
+        let uploadTasks = [];
+        let downloadTaskId = 0;
+        let downloadTasks = [];
+        let currentQuickShareUrl = '';
+        let lastConnectUrls = [];
+        let selectedBatchFiles = new Map();
+        let allMessages = [];
+        let lightboxImages = [];
+        let currentLightboxIndex = 0;
+        const MAX_ACTIVE_DOWNLOADS = 3;
+        const MAX_FILE_SIZE = 1024 * 1024 * 1024 * 1024 * 1024; // 1PB, effectively unlimited
+        const DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024;
+        const MAX_UPLOAD_CHUNK_RETRIES = 3;
+        const FILE_EXPIRATION_LABELS = {
+            '1h': '1 小时后过期',
+            '1d': '1 天后过期',
+            '7d': '7 天后过期',
+            never: '永久保留'
+        };
+
+        // 生成或获取一个随机的客户端名称，用于区分“自己”和“别人”
+        function getClientName() {
+            let name = localStorage.getItem('lan_quick_transfer_client');
+            if (!name) {
+                name = 'Device_' + Math.random().toString(36).substring(2, 6).toUpperCase();
+                localStorage.setItem('lan_quick_transfer_client', name);
+            }
+            return name;
+        }
+
+        const localClientName = getClientName();
+
+        // 动态配置服务器地址逻辑
+        function getServerUrl() {
+            let url = localStorage.getItem('lan_server_url');
+            if (url) {
+                return url.replace(/\/+$/, '');
+            }
+            if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+                return window.location.origin;
+            }
+            return null; // File 协议且未配置时返回 null
+        }
+
+        function setServerUrl(url) {
+            let cleanUrl = (url || '').trim().replace(/\/+$/, '');
+            if (cleanUrl && !/^https?:\/\//i.test(cleanUrl)) {
+                cleanUrl = 'http://' + cleanUrl;
+            }
+            localStorage.setItem('lan_server_url', cleanUrl);
+            return cleanUrl;
+        }
+
+        function apiFetch(path, options = {}) {
+            const baseUrl = getServerUrl();
+            if (!baseUrl) return Promise.reject(new Error("未配置服务器地址"));
+
+            options.headers = options.headers || {};
+            if (!options.headers['X-Client-Name']) {
+                options.headers['X-Client-Name'] = localClientName;
+            }
+            
+            // 使用 include 以便在使用 IP 跨域时能够自动处理凭据，如果服务器不支持则会退化为不携带
+            if (!options.credentials) {
+                options.credentials = 'include';
+            }
+            
+            // JSDOM fallback
+            const fetchFn = typeof fetch !== 'undefined' ? fetch : (typeof window !== 'undefined' && window.fetch ? window.fetch : null);
+            if (!fetchFn) {
+                return new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open(options.method || 'GET', baseUrl + path, true);
+                    xhr.withCredentials = true;
+                    if (options.headers) {
+                        for (let k in options.headers) {
+                            xhr.setRequestHeader(k, options.headers[k]);
+                        }
+                    }
+                    xhr.onload = () => {
+                        resolve({
+                            ok: xhr.status >= 200 && xhr.status < 300,
+                            status: xhr.status,
+                            json: () => Promise.resolve(JSON.parse(xhr.responseText))
+                        });
+                    };
+                    xhr.onerror = () => reject(new Error('Network Error'));
+                    xhr.send(options.body || null);
+                });
+            }
+
+            return fetchFn(baseUrl + path, options);
+        }
+
+        function updateConnectionStatus(isConnected) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('onlineCount');
+            if (isConnected) {
+                dot.classList.remove('offline');
+                text.textContent = '实时同步中';
+            } else {
+                dot.classList.add('offline');
+                text.textContent = '连接断开';
+            }
+        }
+
+        // 配置弹窗交互
+        document.getElementById('btnOpenConfig').addEventListener('click', () => {
+            document.getElementById('serverUrlInput').value = getServerUrl() || '';
+            document.getElementById('configModal').classList.add('active');
+        });
+        
+        document.getElementById('btnCancelConfig').addEventListener('click', () => {
+            document.getElementById('configModal').classList.remove('active');
+        });
+        document.getElementById('btnOpenConnect').addEventListener('click', () => {
+            document.getElementById('connectModal').classList.add('active');
+            loadServerInfo();
+        });
+        document.getElementById('btnCloseConnect').addEventListener('click', () => {
+            document.getElementById('connectModal').classList.remove('active');
+        });
+        document.getElementById('btnRefreshConnect').addEventListener('click', () => {
+            loadServerInfo();
+        });
+        document.getElementById('btnCopyAllConnect').addEventListener('click', () => {
+            copyConnectUrls();
+        });
+        document.getElementById('btnCopyQuickShare').addEventListener('click', () => {
+            copyText(currentQuickShareUrl);
+        });
+        document.getElementById('connectQrImage').addEventListener('error', () => {
+            document.getElementById('connectQrTip').textContent = '本地二维码生成失败，请直接复制下方地址访问';
+        });
+        document.getElementById('btnOpenDevices').addEventListener('click', () => {
+            document.getElementById('deviceModal').classList.add('active');
+            loadDevices();
+        });
+        document.getElementById('btnCloseDevices').addEventListener('click', () => {
+            document.getElementById('deviceModal').classList.remove('active');
+        });
+        document.getElementById('btnRefreshDevices').addEventListener('click', () => {
+            loadDevices();
+        });
+        document.getElementById('btnOpenStorage').addEventListener('click', () => {
+            document.getElementById('storageModal').classList.add('active');
+            loadStorageInfo();
+        });
+        document.getElementById('btnCloseStorage').addEventListener('click', () => {
+            document.getElementById('storageModal').classList.remove('active');
+        });
+        document.getElementById('btnRefreshStorage').addEventListener('click', () => {
+            loadStorageInfo();
+        });
+        document.getElementById('btnSaveStorage').addEventListener('click', () => {
+            saveStorageConfig();
+        });
+        document.getElementById('btnCleanupRetention').addEventListener('click', () => {
+            runStorageCleanup('retention');
+        });
+        document.getElementById('btnCleanupAll').addEventListener('click', () => {
+            runStorageCleanup('all');
+        });
+        document.getElementById('btnClearHistory').addEventListener('click', () => {
+            clearChatHistory();
+        });
+        document.getElementById('btnClearFiles').addEventListener('click', () => {
+            clearUploadedFiles();
+        });
+        document.getElementById('btnBatchDownload').addEventListener('click', () => {
+            downloadSelectedFilesAsZip();
+        });
+
+        document.getElementById('btnSaveConfig').addEventListener('click', () => {
+            const inputVal = document.getElementById('serverUrlInput').value;
+            if (!inputVal) {
+                alertToast('请输入有效的地址', 'warning');
+                return;
+            }
+            setServerUrl(inputVal);
+            document.getElementById('configModal').classList.remove('active');
+            
+            // 重新初始化连接
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            init();
+        });
+
+        function init() {
+            const baseUrl = getServerUrl();
+            if (!baseUrl) {
+                document.getElementById('configModal').classList.add('active');
+                updateConnectionStatus(false);
+                return;
+            }
+
+            apiFetch('/api/session-status')
+                .then(res => {
+                    if (!res.ok) throw new Error('Network response was not ok');
+                    return res.json();
+                })
+                .then(data => {
+                    if (data.loggedIn && data.session) {
+                        currentSession = data.session;
+                        currentSession.clientName = localClientName;
+                        knownDevices = Array.isArray(data.knownDevices) ? data.knownDevices : [];
+                    } else {
+                        currentSession = { clientName: localClientName, username: '匿名用户' };
+                    }
+                    
+                    updateConnectionStatus(true);
+                    loadServerInfo();
+                    loadHistory();
+                    connectSSE();
+                })
+                .catch(err => {
+                    console.error('获取状态失败', err);
+                    updateConnectionStatus(false);
+                    // 即使失败，也使用匿名身份继续重试或提示
+                    currentSession = { clientName: localClientName, username: '匿名用户' };
+                });
+        }
+
+        function loadHistory() {
+            apiFetch('/api/chat/history')
+                .then(res => {
+                    if (!res.ok) throw new Error('Network response was not ok');
+                    return res.json();
+                })
+                .then(data => {
+                    if (data.success && data.messages) {
+                        allMessages = data.messages;
+                        renderMessages();
+                    }
+                })
+                .catch(() => {
+                    updateConnectionStatus(false);
+                });
+        }
+
+        function getFilteredMessages() {
+            const keyword = document.getElementById('fileSearchInput').value.trim().toLowerCase();
+            const device = document.getElementById('deviceFilterInput').value.trim().toLowerCase();
+            const date = document.getElementById('dateFilterInput').value;
+
+            return allMessages.filter(msg => {
+                const text = [
+                    msg.content,
+                    msg.fileName,
+                    msg.fileDisplayName,
+                    msg.displaySender,
+                    msg.sender,
+                    msg.clientName,
+                    msg.ip
+                ].join(' ').toLowerCase();
+                if (keyword && !text.includes(keyword)) return false;
+                if (device && !text.includes(device)) return false;
+                if (date) {
+                    const msgDate = new Date(msg.timestamp || Date.now()).toISOString().slice(0, 10);
+                    if (msgDate !== date) return false;
+                }
+                return true;
+            });
+        }
+
+        function renderMessages() {
+            const container = document.getElementById('messages');
+            const messages = getFilteredMessages();
+            container.innerHTML = '';
+            lightboxImages = [];
+            selectedBatchFiles = new Map();
+            if (!messages.length) {
+                renderMessagesPlaceholder(allMessages.length ? '没有匹配的消息或文件。' : '暂无消息，发送一条文字或文件试试。');
+                return;
+            }
+            messages.forEach(msg => appendMessage(msg));
+            scrollToBottom();
+        }
+
+        function applyMessageFilters() {
+            renderMessages();
+        }
+
+        function hasActiveFilters() {
+            const keyword = document.getElementById('fileSearchInput').value.trim();
+            const device = document.getElementById('deviceFilterInput').value.trim();
+            const date = document.getElementById('dateFilterInput').value;
+            return !!(keyword || device || date);
+        }
+
+        function formatMessageTime(timestamp) {
+            const date = new Date(timestamp || Date.now());
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}`;
+        }
+
+        function getSelectedExpirationPreset() {
+            const select = document.getElementById('fileExpireSelect');
+            return select ? select.value || 'never' : 'never';
+        }
+
+        function getExpirationTimestamp(preset) {
+            const now = Date.now();
+            if (preset === '1h') return now + 60 * 60 * 1000;
+            if (preset === '1d') return now + 24 * 60 * 60 * 1000;
+            if (preset === '7d') return now + 7 * 24 * 60 * 60 * 1000;
+            return null;
+        }
+
+        function formatExpirationTip(msg) {
+            if (!msg || !msg.fileUrl) return '';
+            if (msg.expiresAt) {
+                return `保留至 ${formatMessageTime(msg.expiresAt)}`;
+            }
+            return FILE_EXPIRATION_LABELS[msg.expirationPreset || 'never'] || '永久保留';
+        }
+
+        function renderMessagesPlaceholder(text) {
+            document.getElementById('messages').innerHTML =
+                `<div style="text-align:center; padding: 20px; color: #9ca3af; font-size: 0.9rem;">${escapeHtml(text)}</div>`;
+        }
+
+        function formatDeviceLastSeen(value) {
+            if (!value) return '未记录活动时间';
+            return '最近活动：' + formatMessageTime(value);
+        }
+
+        function copyText(value) {
+            if (!value) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(value)
+                    .then(() => alertToast('地址已复制', 'success'))
+                    .catch(() => fallbackCopyText(value));
+                return;
+            }
+            fallbackCopyText(value);
+        }
+
+        function copyConnectUrls() {
+            const urls = lastConnectUrls.length ? lastConnectUrls : [currentQuickShareUrl].filter(Boolean);
+            if (!urls.length) {
+                alertToast('暂无可复制的连接地址', 'warning');
+                return;
+            }
+            copyText(urls.join('\n'));
+        }
+
+        function fallbackCopyText(value) {
+            const input = document.createElement('textarea');
+            input.value = value;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+            alertToast('地址已复制', 'success');
+        }
+
+        function getQrImageUrl(value) {
+            const baseUrl = getServerUrl();
+            if (!value || !baseUrl) {
+                return '';
+            }
+            return `${baseUrl}/api/qr.svg?text=${encodeURIComponent(value)}`;
+        }
+
+        function renderConnectInfo() {
+            const urlContainer = document.getElementById('connectUrlList');
+            const onlineContainer = document.getElementById('onlineDeviceList');
+            const qrImage = document.getElementById('connectQrImage');
+            const qrTip = document.getElementById('connectQrTip');
+
+            if (!serverInfo) {
+                urlContainer.innerHTML = '<div class="empty-state">暂时无法获取连接信息</div>';
+                onlineContainer.innerHTML = '<div class="empty-state">暂时无法获取在线设备</div>';
+                qrImage.removeAttribute('src');
+                qrTip.textContent = '暂无可用二维码';
+                return;
+            }
+
+            const preferredUrl = serverInfo.preferredUrl || getServerUrl() || '';
+            updateQuickShareBar(preferredUrl);
+            if (preferredUrl) {
+                const qrUrl = getQrImageUrl(preferredUrl);
+                if (qrUrl) {
+                    qrImage.src = qrUrl;
+                    qrTip.textContent = preferredUrl;
+                } else {
+                    qrImage.removeAttribute('src');
+                    qrTip.textContent = '本地二维码生成失败，请直接复制下方地址访问';
+                }
+            } else {
+                qrImage.removeAttribute('src');
+                qrTip.textContent = '暂无可用二维码';
+            }
+
+            const urls = Array.isArray(serverInfo.urls) ? serverInfo.urls : [];
+            lastConnectUrls = urls;
+            if (!urls.length) {
+                urlContainer.innerHTML = '<div class="empty-state">没有可用连接地址</div>';
+            } else {
+                urlContainer.innerHTML = urls.map(url => {
+                    const isPreferred = url === preferredUrl;
+                    return `
+                        <div class="url-row">
+                            <div class="url-main">
+                                <div>${escapeHtml(url)}</div>
+                                ${isPreferred ? '<div class="url-badge">推荐扫码地址</div>' : ''}
+                            </div>
+                            <button class="small-btn" onclick="copyText('${escapeAttribute(url)}')">复制地址</button>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            const onlineDevices = Array.isArray(serverInfo.onlineDevices) ? serverInfo.onlineDevices : [];
+            if (!onlineDevices.length) {
+                onlineContainer.innerHTML = '<div class="empty-state">当前还没有检测到在线设备，等对方打开页面后会显示在这里。</div>';
+            } else {
+                onlineContainer.innerHTML = onlineDevices.map(device => {
+                    const title = device.alias || device.clientName || device.ip || '未知设备';
+                    return `
+                        <div class="online-row">
+                            <div class="online-main">
+                                <div>${escapeHtml(title)}</div>
+                                <div class="device-extra">${escapeHtml(device.ip || '未知 IP')}</div>
+                                <div class="device-extra">${escapeHtml('连接时间：' + formatMessageTime(device.connectedAt))}</div>
+                                ${device.alias ? `<div class="online-badge">${escapeHtml(device.clientName || '设备')}</div>` : ''}
+                            </div>
+                            <button class="small-btn" onclick="document.getElementById('connectModal').classList.remove('active'); document.getElementById('deviceModal').classList.add('active'); loadDevices();">去备注</button>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        function updateQuickShareBar(url) {
+            const bar = document.getElementById('quickShareBar');
+            const text = document.getElementById('quickShareUrl');
+            currentQuickShareUrl = url || '';
+            if (!currentQuickShareUrl) {
+                bar.classList.remove('active');
+                text.textContent = '暂无可用地址';
+                return;
+            }
+            text.textContent = currentQuickShareUrl;
+            bar.classList.add('active');
+        }
+
+        function renderStorageInfo() {
+            const summary = document.getElementById('storageSummary');
+            const details = document.getElementById('storageDetails');
+
+            if (!storageInfo || !storageInfo.usage || !storageInfo.policy) {
+                summary.innerHTML = '<div class="storage-card"><div class="storage-label">当前存储占用</div><div class="storage-value">--</div></div>';
+                details.innerHTML = '<div class="empty-state">暂时无法获取存储信息</div>';
+                return;
+            }
+
+            const usage = storageInfo.usage;
+            const policy = storageInfo.policy;
+
+            summary.innerHTML = `
+                <div class="storage-card">
+                    <div class="storage-label">当前占用</div>
+                    <div class="storage-value">${escapeHtml(formatBytes(usage.managedBytes || 0))}</div>
+                    <div class="storage-subtext">上传文件 + 临时分片</div>
+                </div>
+                <div class="storage-card">
+                    <div class="storage-label">容量上限</div>
+                    <div class="storage-value">${policy.maxStorageBytes > 0 ? escapeHtml(formatBytes(policy.maxStorageBytes)) : '未限制'}</div>
+                    <div class="storage-subtext">${policy.autoCleanupEnabled ? '超出后自动清理旧文件' : '自动清理已关闭'}</div>
+                </div>
+                <div class="storage-card">
+                    <div class="storage-label">按天清理</div>
+                    <div class="storage-value">${policy.retentionDays > 0 ? escapeHtml(policy.retentionDays + ' 天') : '已关闭'}</div>
+                    <div class="storage-subtext">会优先清理更早的文件和临时分片</div>
+                </div>
+                <div class="storage-card">
+                    <div class="storage-label">历史记录占用</div>
+                    <div class="storage-value">${escapeHtml(formatBytes(usage.historyBytes || 0))}</div>
+                    <div class="storage-subtext">聊天记录、配置和设备备注单独统计</div>
+                </div>
+            `;
+
+            details.innerHTML = `
+                <div class="storage-row"><span>已上传文件</span><strong>${escapeHtml((usage.uploadsCount || 0) + ' 个 / ' + formatBytes(usage.uploadsBytes || 0))}</strong></div>
+                <div class="storage-row"><span>临时分片</span><strong>${escapeHtml((usage.tempCount || 0) + ' 项 / ' + formatBytes(usage.tempBytes || 0))}</strong></div>
+                <div class="storage-row"><span>聊天历史</span><strong>${escapeHtml(formatBytes(usage.historyBytes || 0))}</strong></div>
+                <div class="storage-row"><span>配置与备注</span><strong>${escapeHtml(formatBytes((usage.configBytes || 0) + (usage.devicesBytes || 0)))}</strong></div>
+                <div class="storage-row"><span>总占用</span><strong>${escapeHtml(formatBytes(usage.totalBytes || 0))}</strong></div>
+                <div class="storage-row"><span>统计时间</span><strong>${escapeHtml(formatMessageTime(storageInfo.generatedAt || Date.now()))}</strong></div>
+            `;
+
+            document.getElementById('retentionDaysInput').value = String(policy.retentionDays || 0);
+            document.getElementById('maxStorageGbInput').value = policy.maxStorageBytes > 0
+                ? (policy.maxStorageBytes / 1024 / 1024 / 1024).toFixed(1).replace(/\.0$/, '')
+                : '0';
+            document.getElementById('autoCleanupEnabledInput').checked = !!policy.autoCleanupEnabled;
+        }
+
+        function loadStorageInfo() {
+            apiFetch('/api/storage/status')
+                .then(res => {
+                    if (!res.ok) throw new Error('Network response was not ok');
+                    return res.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        storageInfo = data.stats || null;
+                        renderStorageInfo();
+                    }
+                })
+                .catch(() => {
+                    storageInfo = null;
+                    renderStorageInfo();
+                });
+        }
+
+        function loadServerInfo() {
+            apiFetch('/api/server-info')
+                .then(res => {
+                    if (!res.ok) throw new Error('Network response was not ok');
+                    return res.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        serverInfo = data;
+                        knownDevices = Array.isArray(data.knownDevices) ? data.knownDevices : knownDevices;
+                        renderConnectInfo();
+                        if (document.getElementById('deviceModal').classList.contains('active')) {
+                            renderDeviceList();
+                        }
+                    }
+                })
+                .catch(() => {
+                    if (document.getElementById('connectModal').classList.contains('active')) {
+                        serverInfo = null;
+                        renderConnectInfo();
+                    }
+                });
+        }
+
+        function escapeAttribute(value) {
+            return escapeHtml(value).replace(/`/g, '&#96;');
+        }
+
+        function renderDeviceList() {
+            const container = document.getElementById('deviceList');
+            if (!knownDevices.length) {
+                container.innerHTML = '<div class="empty-state">暂时还没有发现局域网设备，等有设备访问后会显示在这里。</div>';
+                return;
+            }
+
+            container.innerHTML = knownDevices.map(device => {
+                const names = Array.isArray(device.clientNames) && device.clientNames.length
+                    ? '历史名称：' + device.clientNames.join('、')
+                    : '历史名称：暂无';
+                return `
+                    <div class="device-row">
+                        <div>
+                            <div class="device-ip">${escapeHtml(device.ip)}</div>
+                            <div class="device-extra">${escapeHtml(names)}</div>
+                            <div class="device-extra">${escapeHtml(formatDeviceLastSeen(device.lastSeen))}</div>
+                        </div>
+                        <input class="device-alias-input" data-ip="${escapeAttribute(device.ip)}" type="text" value="${escapeAttribute(device.alias || '')}" placeholder="输入设备备注，例如 张三电脑">
+                        <button onclick="saveDeviceAlias('${escapeAttribute(device.ip)}')">保存备注</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function loadDevices() {
+            apiFetch('/api/devices')
+                .then(res => {
+                    if (!res.ok) throw new Error('Network response was not ok');
+                    return res.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        knownDevices = Array.isArray(data.devices) ? data.devices : [];
+                        renderDeviceList();
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('deviceList').innerHTML = '<div class="empty-state">设备列表加载失败，请检查服务器连接。</div>';
+                });
+        }
+
+        function findDeviceAliasInput(ip) {
+            const inputs = document.querySelectorAll('.device-alias-input');
+            for (const input of inputs) {
+                if (input.getAttribute('data-ip') === ip) {
+                    return input;
+                }
+            }
+            return null;
+        }
+
+        function saveDeviceAlias(ip) {
+            const input = findDeviceAliasInput(ip);
+            if (!input) return;
+
+            apiFetch('/api/devices/alias', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ip, alias: input.value.trim() })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error('Network response was not ok');
+                return res.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    knownDevices = Array.isArray(data.devices) ? data.devices : [];
+                    renderDeviceList();
+                    loadHistory();
+                } else {
+                    alertToast('保存备注失败: ' + data.error, 'error');
+                }
+            })
+            .catch(() => {
+                alertToast('保存备注失败，请检查服务器连接', 'error');
+            });
+        }
+
+        function clearUploadedFiles() {
+            confirmToast('确认一键清理所有已上传文件吗？对应文件消息也会一起移除，此操作不可恢复。', () => {
+            apiFetch('/api/chat/clear-files', {
+                method: 'POST'
+            })
+            .then(res => {
+                if (!res.ok) throw new Error('Network response was not ok');
+                return res.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    alertToast(`已清理 ${data.deletedFiles} 个文件，并移除 ${data.removedMessages} 条文件消息`, 'success');
+                    loadHistory();
+                    if (document.getElementById('storageModal').classList.contains('active')) {
+                        loadStorageInfo();
+                    }
+                } else {
+                    alertToast('清理失败: ' + data.error, 'error');
+                }
+            })
+            .catch(() => {
+                alertToast('清理失败，请检查服务器连接', 'error');
+            });
+            });
+        }
+
+        function clearChatHistory() {
+            confirmToast('确认清空全部聊天记录吗？仅删除消息记录，不删除已上传文件。此操作不可恢复。', () => {
+            apiFetch('/api/chat/clear', {
+                method: 'POST'
+            })
+            .then(res => {
+                if (!res.ok) throw new Error('Network response was not ok');
+                return res.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    renderMessagesPlaceholder('记录已被清空');
+                    alertToast(`已清空 ${data.removedMessages} 条聊天记录`, 'success');
+                    if (document.getElementById('storageModal').classList.contains('active')) {
+                        loadStorageInfo();
+                    }
+                } else {
+                    alertToast('清空失败: ' + data.error, 'error');
+                }
+            })
+            .catch(() => {
+                alertToast('清空失败，请检查服务器连接', 'error');
+            });
+            });
+        }
+
+        function saveStorageConfig() {
+            const retentionDays = Number(document.getElementById('retentionDaysInput').value);
+            const maxStorageGb = Number(document.getElementById('maxStorageGbInput').value);
+            const autoCleanupEnabled = document.getElementById('autoCleanupEnabledInput').checked;
+
+            if (!Number.isFinite(retentionDays) || retentionDays < 0) {
+                alertToast('按天清理请输入大于等于 0 的数字', 'warning');
+                return;
+            }
+
+            if (!Number.isFinite(maxStorageGb) || maxStorageGb < 0) {
+                alertToast('容量上限请输入大于等于 0 的数字', 'warning');
+                return;
+            }
+
+            apiFetch('/api/storage/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    retentionDays: Math.floor(retentionDays),
+                    maxStorageBytes: Math.round(maxStorageGb * 1024 * 1024 * 1024),
+                    autoCleanupEnabled
+                })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error('Network response was not ok');
+                return res.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    storageInfo = data.stats || null;
+                    renderStorageInfo();
+                    const result = data.cleanupResult;
+                    if (result && (result.deletedFiles || result.deletedSessions || result.removedMessages)) {
+                        loadHistory();
+                    }
+                    alertToast('存储策略已保存', 'success');
+                } else {
+                    alertToast('保存失败: ' + data.error, 'error');
+                }
+            })
+            .catch(() => {
+                alertToast('保存失败，请检查服务器连接', 'error');
+            });
+        }
+
+        function runStorageCleanup(mode) {
+            const modeText = mode === 'retention' ? '按天清理' : '自动清理';
+            confirmToast(`确认立即执行${modeText}吗？`, () => {
+            apiFetch('/api/storage/cleanup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error('Network response was not ok');
+                return res.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    storageInfo = data.stats || null;
+                    renderStorageInfo();
+                    const result = data.result || {};
+                    if (result.deletedFiles || result.removedMessages) {
+                        loadHistory();
+                    }
+                    alertToast(`已清理 ${result.deletedFiles || 0} 个文件、${result.deletedSessions || 0} 个临时分片目录，释放 ${formatBytes(result.freedBytes || 0)}`, 'success');
+                } else {
+                    alertToast('清理失败: ' + data.error, 'error');
+                }
+            })
+            .catch(() => {
+                alertToast('清理失败，请检查服务器连接', 'error');
+            });
+            });
+        }
+
+        function connectSSE() {
+            if (eventSource) return;
+            const baseUrl = getServerUrl();
+            if (!baseUrl) return;
+
+            // JSDOM EventSource fallback mock (for testing)
+            if (typeof EventSource === 'undefined') {
+                console.warn('EventSource is not supported in this environment');
+                return;
+            }
+
+            eventSource = new EventSource(baseUrl + '/api/events?clientName=' + encodeURIComponent(localClientName), { withCredentials: true });
+            
+            eventSource.onopen = function() {
+                updateConnectionStatus(true);
+            };
+
+            eventSource.onerror = function() {
+                updateConnectionStatus(false);
+            };
+
+            eventSource.onmessage = function(e) {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.type === 'chat-message') {
+                        allMessages.push(data);
+                        if (hasActiveFilters()) {
+                            renderMessages();
+                        } else {
+                            appendMessage(data);
+                            scrollToBottom();
+                        }
+                    } else if (data.type === 'chat_clear') {
+                        allMessages = [];
+                        renderMessagesPlaceholder('记录已被清空');
+                    } else if (data.type === 'files_cleared') {
+                        loadHistory();
+                        if (document.getElementById('storageModal').classList.contains('active')) {
+                            loadStorageInfo();
+                        }
+                    } else if (data.type === 'device_alias_updated') {
+                        knownDevices = Array.isArray(data.devices) ? data.devices : knownDevices;
+                        if (document.getElementById('deviceModal').classList.contains('active')) {
+                            renderDeviceList();
+                        }
+                        loadServerInfo();
+                        loadHistory();
+                    } else if (data.type === 'storage_updated') {
+                        storageInfo = data.stats || storageInfo;
+                        if (document.getElementById('storageModal').classList.contains('active')) {
+                            renderStorageInfo();
+                        }
+                    } else if (data.type === 'connections') {
+                        document.getElementById('onlineCount').textContent = `${data.count} 个设备在线`;
+                        if (!serverInfo) {
+                            serverInfo = {};
+                        }
+                        serverInfo.onlineDevices = Array.isArray(data.onlineDevices) ? data.onlineDevices : [];
+                        if (document.getElementById('connectModal').classList.contains('active')) {
+                            renderConnectInfo();
+                        }
+                    }
+                } catch (err) {
+                    console.error('SSE Error:', err);
+                }
+            };
+        }
+
+        function appendMessage(msg) {
+            const container = document.getElementById('messages');
+            // 判断是否是自己发的
+            const isSelf = (currentSession && msg.clientName === currentSession.clientName) || msg.sender === localClientName || msg.clientName === localClientName;
+            
+            const msgEl = document.createElement('div');
+            msgEl.className = `msg ${isSelf ? 'self' : 'other'}`;
+            
+            const timeStr = formatMessageTime(msg.timestamp);
+            
+            let contentHtml = '';
+            if (msg.fileUrl) {
+                let finalUrl = msg.fileUrl;
+                const displayFileName = msg.fileDisplayName || msg.fileName || '未命名文件';
+                // 如果是相对路径，拼上 baseUrl
+                if (finalUrl.startsWith('/')) {
+                    const baseUrl = getServerUrl();
+                    if (baseUrl) finalUrl = baseUrl + finalUrl;
+                }
+                
+                // 【核心修复】为了防止中文文件名下载乱码，必须使用 ?name=URL编码 方式传递
+                // 后端 Core Memory 提示：Use URL query parameters (?name=) to pass the original filename to the download endpoint
+                if (msg.fileName && !finalUrl.includes('name=')) {
+                    finalUrl += (finalUrl.includes('?') ? '&' : '?') + 'name=' + encodeURIComponent(msg.fileName);
+                }
+                
+                const expireTip = formatExpirationTip(msg);
+                const selectableFile = {
+                    fileUrl: msg.fileUrl,
+                    fileName: msg.fileName || displayFileName,
+                    fileDisplayName: displayFileName
+                };
+                const selectableValue = escapeAttribute(JSON.stringify(selectableFile));
+                const selectHtml = `<label><input type="checkbox" class="batch-file-check" data-batch-file="${selectableValue}">加入打包</label>`;
+                if (msg.fileType && msg.fileType.startsWith('image/')) {
+                    const imageIndex = lightboxImages.length;
+                    lightboxImages.push({
+                        url: finalUrl,
+                        fileName: msg.fileName || displayFileName
+                    });
+                    contentHtml = `${selectHtml}<img src="${finalUrl}" class="chat-image" data-lightbox-index="${imageIndex}" alt="图片" title="点击预览大图"><div class="file-expire-tip">${escapeHtml(expireTip)}</div>`;
+                } else {
+                    contentHtml = `${selectHtml}<a href="${finalUrl}" class="chat-file-link tracked-download" data-download-url="${escapeAttribute(finalUrl)}" data-download-name="${escapeAttribute(msg.fileName || displayFileName)}" download="${escapeHtml(msg.fileName || displayFileName)}">
+                        <span class="file-icon">📄</span> <span style="word-break: break-all;">${escapeHtml(displayFileName)}</span>
+                    </a><div class="file-expire-tip">${escapeHtml(expireTip)}</div>`;
+                }
+            } else {
+                contentHtml = escapeHtml(msg.content);
+            }
+            
+            let formattedSender = escapeHtml(msg.displaySender || msg.sender || '未知设备');
+            // 简化长名字显示
+            const senderText = msg.displaySender || msg.sender || '';
+            if (senderText && senderText.includes('使用人员：')) {
+                let parts = senderText.split('使用人员：');
+                formattedSender = escapeHtml(parts[1] ? parts[1].trim() : parts[0]);
+            }
+
+            msgEl.innerHTML = `
+                <div class="msg-meta">${formattedSender} ${isSelf ? '(我)' : ''} • ${timeStr}</div>
+                <div class="msg-bubble">${contentHtml}</div>
+            `;
+            container.appendChild(msgEl);
+            
+            // 如果是图片，等图片加载完再滚动到底部
+            if (msg.fileUrl && msg.fileType && msg.fileType.startsWith('image/')) {
+                const img = msgEl.querySelector('img');
+                if (img) {
+                    img.onload = scrollToBottom;
+                }
+            }
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('messages');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function escapeHtml(str) {
+            return String(str || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function buildMessagePayload(content = '', fileInfo = null) {
+            const payload = { content, isAnnouncement: false };
+            const sessionDisplayName = sessionStorage.getItem('displayName');
+            payload.sender = sessionDisplayName || localClientName;
+            payload.clientName = currentSession ? currentSession.clientName : localClientName;
+
+            if (fileInfo) {
+                payload.fileUrl = fileInfo.fileUrl;
+                payload.fileName = fileInfo.fileName;
+                payload.fileDisplayName = fileInfo.fileDisplayName || fileInfo.fileName;
+                payload.fileType = fileInfo.fileType;
+                payload.expirationPreset = fileInfo.expirationPreset || getSelectedExpirationPreset();
+                payload.expiresAt = fileInfo.expiresAt || getExpirationTimestamp(payload.expirationPreset);
+            }
+
+            return payload;
+        }
+
+        function sendMessage(content = '', fileInfo = null) {
+            if (!content && !fileInfo) return;
+            
+            const input = document.getElementById('chatInput');
+            const btn = document.getElementById('sendBtn');
+            const uploadBtn = document.getElementById('uploadBtn');
+            
+            input.disabled = true;
+            btn.disabled = true;
+            uploadBtn.disabled = true;
+            
+            const payload = buildMessagePayload(content, fileInfo);
+            
+            apiFetch('/api/chat/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => {
+                if (!res.ok) throw new Error('Network response was not ok');
+                return res.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    input.value = '';
+                } else {
+                    alertToast('发送失败: ' + data.error, 'error');
+                }
+            })
+            .catch(err => {
+                alertToast('网络错误，请检查服务器地址是否正确及服务器是否运行', 'error');
+                updateConnectionStatus(false);
+            })
+            .finally(() => {
+                input.disabled = false;
+                btn.disabled = false;
+                uploadBtn.disabled = false;
+                input.focus();
+            });
+        }
+
+        function setUploadProgress(text, percent, visible, meta = {}) {
+            const panel = document.getElementById('uploadStatus');
+            const textEl = document.getElementById('uploadStatusText');
+            const fillEl = document.getElementById('uploadProgressFill');
+            const metaEl = document.getElementById('uploadStatusMeta');
+            const taskListEl = document.getElementById('uploadTaskList');
+
+            if (visible) {
+                panel.classList.add('active');
+                textEl.textContent = text;
+                fillEl.style.width = `${Math.max(0, Math.min(100, percent || 0))}%`;
+                const speedText = meta.speed ? `速度 ${formatSpeed(meta.speed)}` : '速度 --';
+                const remainingText = Number.isFinite(meta.remainingSeconds) ? `剩余 ${formatRemainingTime(meta.remainingSeconds)}` : '剩余 --';
+                const sizeText = meta.loadedBytes || meta.totalBytes
+                    ? `${formatBytes(meta.loadedBytes || 0)} / ${formatBytes(meta.totalBytes || 0)}`
+                    : '';
+                const retryText = meta.retryAttempt ? `第 ${meta.retryAttempt} 次重试` : sizeText;
+                metaEl.innerHTML = `<span>${escapeHtml(speedText)}</span><span>${escapeHtml(remainingText)}</span><span>${escapeHtml(retryText)}</span>`;
+            } else {
+                panel.classList.remove('active');
+                textEl.textContent = '准备上传...';
+                fillEl.style.width = '0%';
+                metaEl.innerHTML = '<span>速度 --</span><span>剩余 --</span>';
+                uploadTasks = [];
+                taskListEl.innerHTML = '';
+            }
+        }
+
+        function renderUploadTasks() {
+            const list = document.getElementById('uploadTaskList');
+            if (!uploadTasks.length) {
+                list.innerHTML = '';
+                return;
+            }
+
+            list.innerHTML = uploadTasks.map(task => {
+                const itemClass = task.status === 'error'
+                    ? 'upload-task-item error'
+                    : task.status === 'done'
+                        ? 'upload-task-item done'
+                        : 'upload-task-item';
+                const progress = Math.min(100, Math.max(0, task.progress || 0));
+                const meta = task.meta || {};
+                const sizeText = meta.totalBytes
+                    ? `${formatBytes(meta.loadedBytes || 0)} / ${formatBytes(meta.totalBytes)}`
+                    : formatBytes(task.file.size);
+                const speedText = meta.speed ? formatSpeed(meta.speed) : '--';
+                const remainingText = Number.isFinite(meta.remainingSeconds)
+                    ? formatRemainingTime(meta.remainingSeconds)
+                    : '--';
+                const stateText = task.status === 'done'
+                    ? '已完成'
+                    : task.status === 'error'
+                        ? (task.error || '上传失败')
+                        : task.status === 'retrying'
+                            ? '重试中'
+                            : task.status === 'uploading'
+                                ? `${progress.toFixed(1)}%`
+                                : '等待中';
+                const retryButton = task.status === 'error'
+                    ? `<button class="small-btn" data-upload-retry-id="${task.id}">重试</button>`
+                    : '';
+
+                return `
+                    <div class="${itemClass}">
+                        <div class="upload-task-top">
+                            <div>
+                                <div class="upload-task-name">${escapeHtml(task.name)}</div>
+                                <div class="upload-task-meta">${escapeHtml(`${sizeText} | ${speedText} | 剩余 ${remainingText}`)}</div>
+                            </div>
+                            <div class="upload-task-state">
+                                <span>${escapeHtml(stateText)}</span>
+                                ${retryButton}
+                            </div>
+                        </div>
+                        <div class="upload-progress-track">
+                            <div class="upload-progress-fill" style="width: ${progress}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function createUploadTasks(files) {
+            uploadTasks = files.map(file => ({
+                id: ++uploadTaskId,
+                file,
+                name: getDisplayFileName(file),
+                progress: 0,
+                status: 'pending',
+                meta: { loadedBytes: 0, totalBytes: file.size }
+            }));
+            renderUploadTasks();
+        }
+
+        function getUploadTaskById(taskId) {
+            return uploadTasks.find(task => task.id === taskId);
+        }
+
+        function updateUploadTask(taskId, updates) {
+            uploadTasks = uploadTasks.map(task => task.id === taskId ? { ...task, ...updates } : task);
+            renderUploadTasks();
+        }
+
+        async function retryUploadTask(taskId) {
+            const task = getUploadTaskById(taskId);
+            if (!task || task.status !== 'error') return;
+            await uploadFiles([task.file]);
+        }
+
+        function formatBytes(bytes) {
+            const value = Number(bytes) || 0;
+            if (value < 1024) return `${value} B`;
+            if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+            if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
+            return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
+        }
+
+        function formatSpeed(bytesPerSecond) {
+            if (!bytesPerSecond || bytesPerSecond <= 0) return '--';
+            return `${formatBytes(bytesPerSecond)}/s`;
+        }
+
+        function formatRemainingTime(seconds) {
+            if (!Number.isFinite(seconds) || seconds < 0) return '--';
+            if (seconds < 60) return `${Math.ceil(seconds)} 秒`;
+            const minutes = Math.floor(seconds / 60);
+            const remainSeconds = Math.ceil(seconds % 60);
+            if (minutes < 60) return `${minutes} 分 ${remainSeconds} 秒`;
+            const hours = Math.floor(minutes / 60);
+            const remainMinutes = minutes % 60;
+            return `${hours} 小时 ${remainMinutes} 分`;
+        }
+
+        function renderDownloadTasks() {
+            const panel = document.getElementById('downloadStatus');
+            const list = document.getElementById('downloadList');
+
+            if (!downloadTasks.length) {
+                panel.classList.remove('active');
+                list.innerHTML = '';
+                return;
+            }
+
+            panel.classList.add('active');
+            list.innerHTML = downloadTasks.map(task => {
+                const itemClass = task.status === 'error'
+                    ? 'download-item error'
+                    : task.status === 'done'
+                        ? 'download-item done'
+                        : task.status === 'paused'
+                            ? 'download-item paused'
+                            : 'download-item';
+                const percentText = task.totalBytes
+                    ? `${Math.min(100, Math.max(0, task.progress || 0)).toFixed(1)}%`
+                    : '下载中';
+                const metaText = task.totalBytes
+                    ? `${formatBytes(task.loadedBytes)} / ${formatBytes(task.totalBytes)} | ${formatSpeed(task.speed)} | 剩余 ${formatRemainingTime(task.remainingSeconds)}`
+                    : `${formatBytes(task.loadedBytes)} | ${formatSpeed(task.speed)}`;
+                const stateText = task.status === 'done'
+                    ? '已完成'
+                    : task.status === 'error'
+                        ? (task.error || '下载失败')
+                        : task.status === 'paused'
+                            ? '已暂停'
+                            : task.status === 'queued'
+                                ? '排队中'
+                                : percentText;
+                const canPause = task.status === 'downloading' || task.status === 'queued';
+                const canResume = task.status === 'paused' || task.status === 'error';
+
+                return `
+                    <div class="${itemClass}" data-download-task-id="${escapeAttribute(task.id)}">
+                        <div class="download-item-top">
+                            <div>
+                                <div class="download-item-name">${escapeHtml(task.fileName)}</div>
+                                <div class="download-item-meta">${escapeHtml(metaText)}</div>
+                            </div>
+                            <div class="download-item-state">${escapeHtml(stateText)}</div>
+                        </div>
+                        <div class="upload-progress-track">
+                            <div class="upload-progress-fill" style="width: ${Math.min(100, Math.max(0, task.progress || 0))}%"></div>
+                        </div>
+                        <div class="download-item-actions">
+                            ${canPause ? `<button class="download-action-btn" data-download-action="pause" data-download-task-id="${escapeAttribute(task.id)}">暂停</button>` : ''}
+                            ${canResume ? `<button class="download-action-btn" data-download-action="resume" data-download-task-id="${escapeAttribute(task.id)}">继续下载</button>` : ''}
+                            <button class="download-action-btn danger" data-download-action="delete" data-download-task-id="${escapeAttribute(task.id)}">删除</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateDownloadTask(taskId, updates) {
+            downloadTasks = downloadTasks.map(task => task.id === taskId ? { ...task, ...updates } : task);
+            renderDownloadTasks();
+        }
+
+        function removeDownloadTaskLater(taskId, delayMs) {
+            window.setTimeout(() => {
+                const task = getDownloadTaskById(taskId);
+                if (task && task.status === 'done') {
+                    downloadTasks = downloadTasks.filter(item => item.id !== taskId);
+                    renderDownloadTasks();
+                }
+            }, delayMs);
+        }
+
+        function getDownloadTaskById(taskId) {
+            return downloadTasks.find(task => task.id === taskId);
+        }
+
+        function triggerBrowserDownload(blob, fileName) {
+            const blobUrl = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = blobUrl;
+            anchor.download = fileName || 'download';
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+            window.setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+        }
+
+        function fallbackDirectDownload(url, fileName) {
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = fileName || '';
+            anchor.target = '_blank';
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+        }
+
+        async function downloadSelectedFilesAsZip() {
+            const files = Array.from(selectedBatchFiles.values());
+            if (!files.length) {
+                alertToast('请先勾选要打包下载的文件', 'warning');
+                return;
+            }
+            try {
+                const response = await apiFetch('/api/chat/batch-download', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ files })
+                });
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    throw new Error(data.error || '打包下载失败');
+                }
+                const blob = await response.blob();
+                triggerBrowserDownload(blob, `lan-quick-transfer-${new Date().toISOString().slice(0, 10)}.zip`);
+            } catch (err) {
+                alertToast(err.message || '打包下载失败，请检查服务器连接', 'error');
+            }
+        }
+
+        function renderLightbox() {
+            const item = lightboxImages[currentLightboxIndex];
+            if (!item) return;
+            document.getElementById('lightboxImage').src = item.url;
+            document.getElementById('imageLightbox').classList.add('active');
+        }
+
+        function openLightbox(index) {
+            if (!lightboxImages.length) return;
+            currentLightboxIndex = Math.max(0, Math.min(lightboxImages.length - 1, Number(index) || 0));
+            renderLightbox();
+        }
+
+        function closeLightbox() {
+            document.getElementById('imageLightbox').classList.remove('active');
+            document.getElementById('lightboxImage').removeAttribute('src');
+        }
+
+        function moveLightbox(step) {
+            if (!lightboxImages.length) return;
+            currentLightboxIndex = (currentLightboxIndex + step + lightboxImages.length) % lightboxImages.length;
+            renderLightbox();
+        }
+
+        async function copyLightboxImage() {
+            const item = lightboxImages[currentLightboxIndex];
+            if (!item || !navigator.clipboard || !window.ClipboardItem) {
+                alertToast('当前浏览器不支持复制图片', 'warning');
+                return;
+            }
+            try {
+                const response = await fetch(item.url);
+                const blob = await response.blob();
+                await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
+                alertToast('图片已复制到剪贴板', 'success');
+            } catch (err) {
+                alertToast('复制图片失败', 'error');
+            }
+        }
+
+        function downloadLightboxImage() {
+            const item = lightboxImages[currentLightboxIndex];
+            if (!item) return;
+            fallbackDirectDownload(item.url, item.fileName);
+        }
+
+        async function sendClipboardText() {
+            if (!navigator.clipboard || !navigator.clipboard.readText) {
+                alertToast('当前浏览器不支持读取剪贴板', 'warning');
+                return;
+            }
+            try {
+                const text = (await navigator.clipboard.readText()).trim();
+                if (!text) {
+                    alertToast('剪贴板没有可发送的文本', 'info');
+                    return;
+                }
+                sendMessage(text);
+            } catch (err) {
+                alertToast('读取剪贴板失败，请检查浏览器权限', 'error');
+            }
+        }
+
+        function parseContentRangeTotal(value) {
+            const match = String(value || '').match(/\/(\d+)$/);
+            return match ? Number(match[1]) || 0 : 0;
+        }
+
+        function startDownloadRequest(taskId) {
+            const task = getDownloadTaskById(taskId);
+            if (!task || task.status === 'done') return;
+
+            const controller = new AbortController();
+            const requestStartBytes = task.loadedBytes || 0;
+            const requestStartedAt = Date.now();
+            const headers = { 'X-Client-Name': localClientName };
+            if (requestStartBytes > 0) {
+                headers.Range = `bytes=${requestStartBytes}-`;
+            }
+
+            updateDownloadTask(taskId, {
+                controller,
+                status: 'downloading',
+                error: '',
+                speed: 0,
+                remainingSeconds: null
+            });
+
+            (async () => {
+                try {
+                    const response = await fetch(task.url, {
+                        method: 'GET',
+                        headers,
+                        credentials: 'same-origin',
+                        signal: controller.signal
+                    });
+                    let taskNow = getDownloadTaskById(taskId);
+                    if (!taskNow || taskNow.controller !== controller) return;
+                    if (!response.ok) {
+                        throw new Error(`下载失败 (${response.status})`);
+                    }
+
+                    let chunks = Array.isArray(taskNow.chunks) ? taskNow.chunks : [];
+                    let loadedBytes = requestStartBytes;
+                    if (requestStartBytes > 0 && response.status === 200) {
+                        chunks = [];
+                        loadedBytes = 0;
+                    }
+
+                    const contentRangeTotal = parseContentRangeTotal(response.headers.get('Content-Range'));
+                    const contentLength = Number(response.headers.get('Content-Length')) || 0;
+                    const totalBytes = contentRangeTotal || (contentLength ? loadedBytes + contentLength : taskNow.totalBytes || 0);
+                    const contentType = response.headers.get('Content-Type') || taskNow.contentType || 'application/octet-stream';
+
+                    updateDownloadTask(taskId, {
+                        chunks,
+                        loadedBytes,
+                        totalBytes,
+                        contentType,
+                        progress: totalBytes ? (loadedBytes / totalBytes) * 100 : 0
+                    });
+
+                    if (!response.body) {
+                        const blob = await response.blob();
+                        chunks.push(blob);
+                        loadedBytes += blob.size;
+                    } else {
+                        const reader = response.body.getReader();
+                        while (true) {
+                            const result = await reader.read();
+                            taskNow = getDownloadTaskById(taskId);
+                            if (!taskNow || taskNow.controller !== controller) return;
+                            if (result.done) break;
+                            const chunk = result.value;
+                            chunks.push(chunk);
+                            loadedBytes += chunk.byteLength || chunk.size || 0;
+                            const elapsedSeconds = Math.max(0.2, (Date.now() - requestStartedAt) / 1000);
+                            const speed = Math.max(0, (loadedBytes - requestStartBytes) / elapsedSeconds);
+                            const progress = totalBytes ? (loadedBytes / totalBytes) * 100 : 0;
+                            const remainingSeconds = totalBytes && speed > 0 ? (totalBytes - loadedBytes) / speed : null;
+
+                            updateDownloadTask(taskId, {
+                                chunks,
+                                loadedBytes,
+                                totalBytes,
+                                progress,
+                                speed,
+                                remainingSeconds
+                            });
+                        }
+                    }
+
+                    taskNow = getDownloadTaskById(taskId);
+                    if (!taskNow || taskNow.controller !== controller) return;
+                    const finalBlob = new Blob(chunks, { type: contentType });
+                    updateDownloadTask(taskId, {
+                        chunks,
+                        controller: null,
+                        loadedBytes: finalBlob.size,
+                        totalBytes: finalBlob.size,
+                        progress: 100,
+                        speed: 0,
+                        remainingSeconds: 0,
+                        status: 'done'
+                    });
+                    triggerBrowserDownload(finalBlob, taskNow.fileName);
+                    removeDownloadTaskLater(taskId, 6000);
+                    processDownloadQueue();
+                } catch (err) {
+                    const taskNow = getDownloadTaskById(taskId);
+                    if (!taskNow || taskNow.status === 'deleted') return;
+                    // 检查是否是同一个下载会话（controller可能已被替换为新的）
+                    if (taskNow.controller && taskNow.controller !== controller) return;
+                    if (err.name === 'AbortError' || taskNow.status === 'paused') {
+                        // 用户主动暂停：保留已下载的数据以便断点续传
+                        updateDownloadTask(taskId, {
+                            controller: null,
+                            status: 'paused',
+                            speed: 0,
+                            remainingSeconds: null
+                        });
+                        return;
+                    }
+                    updateDownloadTask(taskId, {
+                        controller: null,
+                        status: 'error',
+                        error: err.message || '网络错误',
+                        speed: 0,
+                        remainingSeconds: null
+                    });
+                    processDownloadQueue();
+                }
+            })();
+        }
+
+        function pauseDownloadTask(taskId) {
+            const task = getDownloadTaskById(taskId);
+            if (!task || (task.status !== 'downloading' && task.status !== 'queued')) return;
+            // 先abort再更新状态，避免catch块中的竞态条件
+            const controller = task.controller;
+            if (controller) {
+                // 在abort之前标记为paused，让catch块知道这是用户主动暂停
+                updateDownloadTask(taskId, { status: 'paused', speed: 0, remainingSeconds: null });
+                controller.abort();
+            } else {
+                // queued状态的任务没有controller，直接标记暂停
+                updateDownloadTask(taskId, { status: 'paused', speed: 0, remainingSeconds: null });
+            }
+            processDownloadQueue();
+        }
+
+        function resumeDownloadTask(taskId) {
+            const task = getDownloadTaskById(taskId);
+            if (!task || (task.status !== 'paused' && task.status !== 'error')) return;
+            // 清除controller引用，确保重新下载时创建新的AbortController
+            updateDownloadTask(taskId, { status: 'queued', error: '', speed: 0, remainingSeconds: null, controller: null });
+            processDownloadQueue();
+        }
+
+        function deleteDownloadTask(taskId) {
+            const task = getDownloadTaskById(taskId);
+            if (task && task.controller) {
+                // 标记为deleted防止catch块再次更新状态
+                task.status = 'deleted';
+                task.controller.abort();
+            }
+            downloadTasks = downloadTasks.filter(item => item.id !== taskId);
+            renderDownloadTasks();
+            processDownloadQueue();
+        }
+
+        function pauseAllDownloads() {
+            downloadTasks
+                .filter(task => task.status === 'downloading' || task.status === 'queued')
+                .forEach(task => pauseDownloadTask(task.id));
+        }
+
+        function resumeAllDownloads() {
+            downloadTasks
+                .filter(task => task.status === 'paused' || task.status === 'error')
+                .forEach(task => {
+                    updateDownloadTask(task.id, { status: 'queued', error: '', speed: 0, remainingSeconds: null, controller: null });
+                });
+            processDownloadQueue();
+        }
+
+        function deleteAllDownloads() {
+            [...downloadTasks].forEach(task => deleteDownloadTask(task.id));
+        }
+
+        function processDownloadQueue() {
+            const activeCount = downloadTasks.filter(task => task.status === 'downloading').length;
+            const availableSlots = Math.max(0, MAX_ACTIVE_DOWNLOADS - activeCount);
+            if (!availableSlots) return;
+            downloadTasks
+                .filter(task => task.status === 'queued')
+                .slice(0, availableSlots)
+                .forEach(task => startDownloadRequest(task.id));
+        }
+
+        function startTrackedDownload(url, fileName) {
+            if (!url) return;
+
+            const taskId = `download_${++downloadTaskId}`;
+            downloadTasks.unshift({
+                id: taskId,
+                url,
+                fileName: fileName || '未命名文件',
+                loadedBytes: 0,
+                totalBytes: 0,
+                progress: 0,
+                speed: 0,
+                remainingSeconds: null,
+                status: 'queued',
+                error: '',
+                chunks: [],
+                controller: null,
+                contentType: ''
+            });
+            renderDownloadTasks();
+            processDownloadQueue();
+        }
+
+        function setBatchUploadingState(uploading) {
+            isUploadingBatch = uploading;
+            document.getElementById('chatInput').disabled = uploading;
+            document.getElementById('sendBtn').disabled = uploading;
+            document.getElementById('uploadBtn').disabled = uploading;
+            document.getElementById('folderBtn').disabled = uploading;
+            document.getElementById('fileInput').disabled = uploading;
+            document.getElementById('folderInput').disabled = uploading;
+            document.getElementById('uploadBtn').textContent = uploading ? '⏳' : '📎';
+            document.getElementById('folderBtn').textContent = uploading ? '⏳' : '📁';
+            if (!uploading) {
+                document.getElementById('fileInput').value = '';
+                document.getElementById('folderInput').value = '';
+            }
+        }
+
+        function getRelativeFilePath(file) {
+            return file.webkitRelativePath || '';
+        }
+
+        function getDisplayFileName(file) {
+            return getRelativeFilePath(file) || file.name;
+        }
+
+        function hashString(input) {
+            let hash = 0;
+            for (let i = 0; i < input.length; i++) {
+                hash = ((hash << 5) - hash) + input.charCodeAt(i);
+                hash |= 0;
+            }
+            return Math.abs(hash).toString(36);
+        }
+
+        function getFileKey(file) {
+            const raw = [
+                file.name,
+                file.size,
+                file.lastModified,
+                getRelativeFilePath(file)
+            ].join('|');
+            return `upload_${hashString(raw)}`;
+        }
+
+        function getChunkUploadedBytes(fileSize, chunkSize, chunkIndex) {
+            const start = chunkIndex * chunkSize;
+            return Math.max(0, Math.min(fileSize, start + chunkSize) - start);
+        }
+
+        function buildUploadMeta(loadedBytes, totalBytes, startedAt) {
+            const elapsedSeconds = Math.max(0.2, (Date.now() - startedAt) / 1000);
+            const speed = loadedBytes > 0 ? loadedBytes / elapsedSeconds : 0;
+            const remainingSeconds = speed > 0 ? Math.max(0, (totalBytes - loadedBytes) / speed) : null;
+            return {
+                loadedBytes,
+                totalBytes,
+                speed,
+                remainingSeconds
+            };
+        }
+
+        function uploadChunkWithXHR(uploadKey, chunkIndex, totalChunks, chunkBlob, onProgress) {
+            const baseUrl = getServerUrl();
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', baseUrl + '/api/chat/upload/chunk', true);
+                xhr.withCredentials = true;
+                xhr.setRequestHeader('X-Client-Name', localClientName);
+
+                xhr.onload = function() {
+                    try {
+                        const data = JSON.parse(xhr.responseText || '{}');
+                        if (xhr.status >= 200 && xhr.status < 300 && data.success) {
+                            resolve(data);
+                        } else {
+                            reject(new Error(data.error || 'Chunk upload failed'));
+                        }
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+
+                xhr.onerror = function() {
+                    reject(new Error('Network Error'));
+                };
+
+                xhr.upload.onprogress = function(event) {
+                    if (event.lengthComputable && onProgress) {
+                        onProgress(event.loaded / event.total);
+                    }
+                };
+
+                const formData = new FormData();
+                formData.append('uploadKey', uploadKey);
+                formData.append('chunkIndex', String(chunkIndex));
+                formData.append('totalChunks', String(totalChunks));
+                formData.append('chunk', chunkBlob, `${chunkIndex}.part`);
+                xhr.send(formData);
+            });
+        }
+
+        function delay(ms) {
+            return new Promise(resolve => window.setTimeout(resolve, ms));
+        }
+
+        async function uploadChunkWithRetry(uploadKey, chunkIndex, totalChunks, chunkBlob, onProgress, onRetry) {
+            let lastError = null;
+            for (let attempt = 1; attempt <= MAX_UPLOAD_CHUNK_RETRIES; attempt++) {
+                try {
+                    return await uploadChunkWithXHR(uploadKey, chunkIndex, totalChunks, chunkBlob, onProgress);
+                } catch (err) {
+                    lastError = err;
+                    if (attempt >= MAX_UPLOAD_CHUNK_RETRIES) {
+                        break;
+                    }
+                    if (onRetry) {
+                        onRetry(attempt + 1, err);
+                    }
+                    await delay(600 * attempt);
+                }
+            }
+            throw lastError || new Error('分片上传失败');
+        }
+
+        function sendUploadedFileMessage(fileInfo) {
+            const payload = buildMessagePayload('', fileInfo);
+            return apiFetch('/api/chat/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => {
+                if (!res.ok) throw new Error('Network response was not ok');
+                return res.json();
+            })
+            .then(data => {
+                if (!data.success) {
+                    throw new Error(data.error || '发送文件消息失败');
+                }
+                return data;
+            });
+        }
+
+        async function uploadSingleFileResumable(file, index, totalCount, taskId = null) {
+            const displayName = getDisplayFileName(file);
+            const relativePath = getRelativeFilePath(file);
+            const fileKey = getFileKey(file);
+
+            const initResponse = await apiFetch('/api/chat/upload/init', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fileKey,
+                    fileName: file.name,
+                    fileType: file.type || 'application/octet-stream',
+                    fileSize: file.size,
+                    relativePath
+                })
+            });
+
+            if (!initResponse.ok) {
+                throw new Error('初始化上传失败');
+            }
+
+            const initData = await initResponse.json();
+            if (!initData.success) {
+                throw new Error(initData.error || '初始化上传失败');
+            }
+
+            const totalChunks = initData.totalChunks || Math.max(1, Math.ceil(file.size / DEFAULT_CHUNK_SIZE));
+            const chunkSize = initData.chunkSize || DEFAULT_CHUNK_SIZE;
+            const uploadedSet = new Set(Array.isArray(initData.uploadedChunks) ? initData.uploadedChunks : []);
+            const startedAt = Date.now();
+            let uploadedBytes = 0;
+
+            if (taskId) {
+                updateUploadTask(taskId, {
+                    status: 'uploading',
+                    progress: 0,
+                    error: '',
+                    meta: buildUploadMeta(0, file.size, startedAt)
+                });
+            }
+
+            for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+                if (uploadedSet.has(chunkIndex)) {
+                    uploadedBytes += getChunkUploadedBytes(file.size, chunkSize, chunkIndex);
+                    const skippedProgress = ((index + ((chunkIndex + 1) / totalChunks)) / totalCount) * 100;
+                    const taskProgress = ((chunkIndex + 1) / totalChunks) * 100;
+                    const taskMeta = buildUploadMeta(uploadedBytes, file.size, startedAt);
+                    setUploadProgress(`继续续传 (${index + 1}/${totalCount}) ${displayName}`, skippedProgress, true, taskMeta);
+                    if (taskId) {
+                        updateUploadTask(taskId, {
+                            status: 'uploading',
+                            progress: taskProgress,
+                            meta: taskMeta
+                        });
+                    }
+                    continue;
+                }
+
+                const start = chunkIndex * chunkSize;
+                const end = Math.min(file.size, start + chunkSize);
+                const chunkBlob = file.slice(start, end);
+
+                await uploadChunkWithRetry(initData.uploadKey, chunkIndex, totalChunks, chunkBlob, (chunkRatio) => {
+                    const currentUploadedBytes = uploadedBytes + Math.round(chunkBlob.size * chunkRatio);
+                    const fileProgress = (chunkIndex + chunkRatio) / totalChunks;
+                    const overallProgress = ((index + fileProgress) / totalCount) * 100;
+                    const taskMeta = buildUploadMeta(currentUploadedBytes, file.size, startedAt);
+                    setUploadProgress(`正在上传 (${index + 1}/${totalCount}) ${displayName}`, overallProgress, true, taskMeta);
+                    if (taskId) {
+                        updateUploadTask(taskId, {
+                            status: 'uploading',
+                            progress: fileProgress * 100,
+                            meta: taskMeta
+                        });
+                    }
+                }, (retryAttempt) => {
+                    const retryProgress = ((index + (chunkIndex / totalChunks)) / totalCount) * 100;
+                    const taskMeta = {
+                        ...buildUploadMeta(uploadedBytes, file.size, startedAt),
+                        retryAttempt
+                    };
+                    setUploadProgress(`网络波动，正在重试 (${index + 1}/${totalCount}) ${displayName}`, retryProgress, true, taskMeta);
+                    if (taskId) {
+                        updateUploadTask(taskId, {
+                            status: 'retrying',
+                            progress: (chunkIndex / totalChunks) * 100,
+                            meta: taskMeta
+                        });
+                    }
+                });
+
+                uploadedBytes += chunkBlob.size;
+                const completedProgress = ((index + ((chunkIndex + 1) / totalChunks)) / totalCount) * 100;
+                const completedTaskMeta = buildUploadMeta(uploadedBytes, file.size, startedAt);
+                setUploadProgress(`正在上传 (${index + 1}/${totalCount}) ${displayName}`, completedProgress, true, completedTaskMeta);
+                if (taskId) {
+                    updateUploadTask(taskId, {
+                        status: 'uploading',
+                        progress: ((chunkIndex + 1) / totalChunks) * 100,
+                        meta: completedTaskMeta
+                    });
+                }
+            }
+
+            const completeResponse = await apiFetch('/api/chat/upload/complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uploadKey: initData.uploadKey })
+            });
+
+            if (!completeResponse.ok) {
+                throw new Error('合并上传文件失败');
+            }
+
+            const completeData = await completeResponse.json();
+            if (!completeData.success) {
+                throw new Error(completeData.error || '合并上传文件失败');
+            }
+
+            if (taskId) {
+                updateUploadTask(taskId, {
+                    status: 'done',
+                    progress: 100,
+                    error: '',
+                    meta: buildUploadMeta(file.size, file.size, startedAt)
+                });
+            }
+
+            return {
+                fileUrl: completeData.fileUrl,
+                fileName: completeData.fileName || file.name,
+                fileDisplayName: relativePath || completeData.fileName || file.name,
+                fileType: completeData.fileType || file.type || 'application/octet-stream'
+            };
+        }
+
+        async function uploadFiles(fileList) {
+            const files = Array.from(fileList || []).filter(Boolean);
+            if (!files.length) return;
+
+            const oversized = files.filter(file => file.size > MAX_FILE_SIZE);
+            if (oversized.length) {
+                alertToast(`以下文件超过限制大小 (${formatBytes(MAX_FILE_SIZE)})，未加入上传：\n${oversized.map(file => getDisplayFileName(file)).join('\n')}`, 'warning');
+            }
+
+            const validFiles = files.filter(file => file.size <= MAX_FILE_SIZE);
+            if (!validFiles.length) {
+                return;
+            }
+
+            setBatchUploadingState(true);
+            setUploadProgress(`准备上传 ${validFiles.length} 个文件...`, 0, true);
+            createUploadTasks(validFiles);
+
+            const failedFiles = [];
+
+            try {
+                for (let i = 0; i < validFiles.length; i++) {
+                    const file = validFiles[i];
+                    const task = uploadTasks[i];
+                    const taskId = task ? task.id : null;
+                    try {
+                        const uploadedFile = await uploadSingleFileResumable(file, i, validFiles.length, taskId);
+                        await sendUploadedFileMessage(uploadedFile);
+                    } catch (err) {
+                        if (taskId) {
+                            updateUploadTask(taskId, {
+                                status: 'error',
+                                error: err.message || '上传失败'
+                            });
+                        }
+                        failedFiles.push({
+                            file,
+                            message: `${getDisplayFileName(file)}: ${err.message}`
+                        });
+                    }
+                }
+
+                setUploadProgress('上传完成', 100, true);
+
+                if (failedFiles.length) {
+                    confirmToast(`上传完成，但有 ${failedFiles.length} 个文件失败：\n${failedFiles.map(item => item.message).join('\n')}\n\n是否立即重试失败文件？`, () => {
+                        window.setTimeout(() => uploadFiles(failedFiles.map(item => item.file)), 200);
+                    })
+                } else if (validFiles.length > 1) {
+                    alertToast(`已完成 ${validFiles.length} 个文件的上传`, 'success');
+                }
+            } catch (err) {
+                alertToast('上传过程中发生错误，请检查服务器连接', 'error');
+                updateConnectionStatus(false);
+            } finally {
+                setBatchUploadingState(false);
+                const hasFailures = uploadTasks.some(task => task.status === 'error');
+                if (!hasFailures) {
+                    window.setTimeout(() => setUploadProgress('', 0, false), 1800);
+                }
+                document.getElementById('chatInput').focus();
+            }
+        }
+
+        function handleFileUpload(file) {
+            return uploadFiles(file ? [file] : []);
+        }
+
+        document.getElementById('sendBtn').addEventListener('click', () => {
+            sendMessage(document.getElementById('chatInput').value.trim());
+        });
+        document.getElementById('fileSearchInput').addEventListener('input', applyMessageFilters);
+        document.getElementById('deviceFilterInput').addEventListener('input', applyMessageFilters);
+        document.getElementById('dateFilterInput').addEventListener('change', applyMessageFilters);
+        document.getElementById('btnClearFilters').addEventListener('click', () => {
+            document.getElementById('fileSearchInput').value = '';
+            document.getElementById('deviceFilterInput').value = '';
+            document.getElementById('dateFilterInput').value = '';
+            applyMessageFilters();
+        });
+        document.getElementById('btnSendClipboard').addEventListener('click', sendClipboardText);
+        document.getElementById('messages').addEventListener('click', (e) => {
+            const image = e.target.closest('.chat-image[data-lightbox-index]');
+            if (image) {
+                openLightbox(image.getAttribute('data-lightbox-index'));
+                return;
+            }
+            const link = e.target.closest('.tracked-download');
+            if (!link) return;
+            e.preventDefault();
+            startTrackedDownload(
+                link.getAttribute('data-download-url'),
+                link.getAttribute('data-download-name')
+            );
+        });
+        document.getElementById('messages').addEventListener('change', (e) => {
+            const checkbox = e.target.closest('.batch-file-check');
+            if (!checkbox) return;
+            try {
+                const fileInfo = JSON.parse(checkbox.getAttribute('data-batch-file') || '{}');
+                if (!fileInfo.fileUrl) return;
+                if (checkbox.checked) {
+                    selectedBatchFiles.set(fileInfo.fileUrl, fileInfo);
+                } else {
+                    selectedBatchFiles.delete(fileInfo.fileUrl);
+                }
+            } catch (err) {
+            }
+        });
+        document.getElementById('uploadTaskList').addEventListener('click', (e) => {
+            const retryButton = e.target.closest('[data-upload-retry-id]');
+            if (!retryButton) return;
+            const taskId = Number(retryButton.getAttribute('data-upload-retry-id'));
+            retryUploadTask(taskId);
+        });
+        document.getElementById('downloadList').addEventListener('click', (e) => {
+            const actionButton = e.target.closest('[data-download-action]');
+            if (!actionButton) return;
+            const action = actionButton.getAttribute('data-download-action');
+            const taskId = actionButton.getAttribute('data-download-task-id');
+            if (action === 'pause') {
+                pauseDownloadTask(taskId);
+            } else if (action === 'resume') {
+                resumeDownloadTask(taskId);
+            } else if (action === 'delete') {
+                deleteDownloadTask(taskId);
+            }
+        });
+        document.getElementById('btnPauseAllDownloads').addEventListener('click', pauseAllDownloads);
+        document.getElementById('btnResumeAllDownloads').addEventListener('click', resumeAllDownloads);
+        document.getElementById('btnDeleteAllDownloads').addEventListener('click', deleteAllDownloads);
+        document.getElementById('btnLightboxPrev').addEventListener('click', () => moveLightbox(-1));
+        document.getElementById('btnLightboxNext').addEventListener('click', () => moveLightbox(1));
+        document.getElementById('btnLightboxCopy').addEventListener('click', copyLightboxImage);
+        document.getElementById('btnLightboxDownload').addEventListener('click', downloadLightboxImage);
+        document.getElementById('btnLightboxClose').addEventListener('click', closeLightbox);
+        document.getElementById('imageLightbox').addEventListener('click', (e) => {
+            if (e.target.id === 'imageLightbox') {
+                closeLightbox();
+            }
+        });
+        
+        document.getElementById('chatInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage(document.getElementById('chatInput').value.trim());
+            }
+        });
+
+        // 粘贴图片支持
+        document.getElementById('chatInput').addEventListener('paste', (e) => {
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            for (const item of items) {
+                if (item.type.indexOf('image') === 0) {
+                    e.preventDefault();
+                    const blob = item.getAsFile();
+                    const timestamp = new Date().getTime();
+                    const file = new File([blob], `截图_${timestamp}.png`, { type: item.type });
+                    handleFileUpload(file);
+                    break;
+                }
+            }
+        });
+
+        // 拖拽文件支持
+        const dropZone = document.getElementById('dropZone');
+        const dragOverlay = document.getElementById('dragOverlay');
+        
+        let dragCounter = 0;
+
+        dropZone.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            dragCounter++;
+            dragOverlay.classList.add('active');
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dragCounter--;
+            if (dragCounter === 0) {
+                dragOverlay.classList.remove('active');
+            }
+        });
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dragCounter = 0;
+            dragOverlay.classList.remove('active');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                uploadFiles(files);
+            }
+        });
+
+        // 按钮上传支持
+        document.getElementById('uploadBtn').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
+        document.getElementById('folderBtn').addEventListener('click', () => {
+            document.getElementById('folderInput').click();
+        });
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                uploadFiles(e.target.files);
+            }
+        });
+        document.getElementById('folderInput').addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                uploadFiles(e.target.files);
+            }
+        });
+
+        // ===== Theme toggle =====
+        const _themeBtn2 = document.getElementById('btnToggleTheme'); if (_themeBtn2) _themeBtn2.addEventListener('click', () => {
+            const current = getStoredTheme();
+            applyTheme(current === 'dark' ? 'light' : 'dark');
+        });
+
+        init();
+    </script>
+</body>
+</html>

@@ -45,7 +45,7 @@ function Emit-Directory($path, $relativePath, $indent) {
         $relFile = $file.FullName.Substring($script:stagingRoot.Length + 1)
         $relFile = $relFile -replace '\\','\\'
         [void]$script:sb.AppendLine("${indent}  <Component Id=`"$compId`" Guid=`"$([guid]::NewGuid().ToString().ToUpper())`">")
-        [void]$script:sb.AppendLine("${indent}    <File Id=`"$fileId`" Source=`"$( $file.FullName )`" KeyPath=`"yes`" />")
+        [void]$script:sb.AppendLine("${indent}    <File Id=`"$fileId`" Name=`"$($file.Name)`" Source=`"$( $file.FullName )`" KeyPath=`"yes`" />")
         [void]$script:sb.AppendLine("${indent}  </Component>")
     }
     
@@ -72,7 +72,7 @@ foreach ($file in $topFiles) {
     $compId = "comp_$($script:fileIdCounter)"
     $script:componentIds.Add($compId)
     [void]$script:sb.AppendLine("      <Component Id=`"$compId`" Guid=`"$([guid]::NewGuid().ToString().ToUpper())`">")
-    [void]$script:sb.AppendLine("        <File Id=`"$fileId`" Source=`"$($file.FullName)`" KeyPath=`"yes`" />")
+    [void]$script:sb.AppendLine("        <File Id=`"$fileId`" Name=`"$($file.Name)`" Source=`"$($file.FullName)`" KeyPath=`"yes`" />")
     [void]$script:sb.AppendLine("      </Component>")
 }
 
@@ -89,6 +89,7 @@ foreach ($cid in $componentIds) {
 [void]$sb.AppendLine("  </Fragment>")
 [void]$sb.AppendLine("</Wix>")
 
-Set-Content -Path $OutFile -Value $sb.ToString() -NoNewline -Encoding UTF8
+$utf8Bom = New-Object System.Text.UTF8Encoding $true
+[System.IO.File]::WriteAllText($OutFile, $sb.ToString(), $utf8Bom)
 Write-Host "Generated: $OutFile" -ForegroundColor Green
 Write-Host ("Components: {0}" -f $componentIds.Count) -ForegroundColor Green

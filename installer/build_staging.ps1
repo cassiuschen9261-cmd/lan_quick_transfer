@@ -20,9 +20,14 @@ foreach ($file in $appFiles) {
     $src = Join-Path $ProjectRoot $file
     if (Test-Path $src) { Copy-Item $src -Destination $appDir -Force }
 }
-$htmlName = [char]0x8F7B + [char]0x91CF + [char]0x5C40 + [char]0x57DF + [char]0x7F51 + [char]0x5FEB + [char]0x4F20 + ".html"
-$htmlSrc = Join-Path $ProjectRoot $htmlName
-if (Test-Path $htmlSrc) { Copy-Item $htmlSrc -Destination $appDir -Force }
+$htmlSrc = Join-Path $ProjectRoot "index.html"
+if (Test-Path $htmlSrc) {
+    Copy-Item $htmlSrc -Destination $appDir -Force
+} else {
+    $cnName = [char]0x8F7B + [char]0x91CF + [char]0x5C40 + [char]0x57DF + [char]0x7F51 + [char]0x5FEB + [char]0x4F20 + ".html"
+    $cnSrc = Join-Path $ProjectRoot $cnName
+    if (Test-Path $cnSrc) { Copy-Item $cnSrc -Destination (Join-Path $appDir "index.html") -Force }
+}
 $scriptsSrc = Join-Path $ProjectRoot "scripts"
 if (Test-Path $scriptsSrc) { Copy-Item $scriptsSrc -Destination (Join-Path $appDir "scripts") -Recurse -Force }
 New-Item -ItemType Directory -Path (Join-Path $appDir "data") -Force | Out-Null
