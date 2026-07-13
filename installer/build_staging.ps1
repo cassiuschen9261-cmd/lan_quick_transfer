@@ -15,7 +15,7 @@ Write-Host "    ProjectRoot: $ProjectRoot" -ForegroundColor Gray
 if (Test-Path $stagingRoot) { Remove-Item $stagingRoot -Recurse -Force }
 New-Item -ItemType Directory -Path $appDir -Force | Out-Null
 Write-Host "Copying application files..." -ForegroundColor Yellow
-$appFiles = @("server.js","package.json","package-lock.json","qr-generator.min.js","start_server.bat","start_server.ps1","start_server_tray.bat","start_server_silent_guardian.bat","README.md","CHANGELOG.md","LICENSE")
+$appFiles = @("server.js","package.json","package-lock.json","qr-generator.min.js","start_server.bat","start_server.ps1","start_server_tray.bat","start_server_silent_guardian.bat","README.md","CHANGELOG.md","LICENSE","installer\wix\app.ico")
 foreach ($file in $appFiles) {
     $src = Join-Path $ProjectRoot $file
     if (Test-Path $src) { Copy-Item $src -Destination $appDir -Force }

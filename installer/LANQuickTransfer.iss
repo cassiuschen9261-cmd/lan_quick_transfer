@@ -29,7 +29,7 @@ WizardStyle=modern
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=admin
-UninstallDisplayIcon={app}\runtime\node.exe
+UninstallDisplayIcon={app}\app.ico
 UninstallDisplayName={#MyAppName}
 SetupIconFile=wix\app.ico
 VersionInfoVersion=1.2.0.0
@@ -45,10 +45,10 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#StagingDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\runtime\node.exe"; Comment: "Start LAN Quick Transfer server"
-Name: "{group}\{#MyAppName} (Tray)"; Filename: "{app}\launch_tray.bat"; WorkingDir: "{app}"; IconFilename: "{app}\runtime\node.exe"; Comment: "Start in Windows tray background mode"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\app.ico"; Comment: "Start LAN Quick Transfer server"
+Name: "{group}\{#MyAppName} (Tray)"; Filename: "{app}\launch_tray.bat"; WorkingDir: "{app}"; IconFilename: "{app}\app.ico"; Comment: "Start in Windows tray background mode"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\runtime\node.exe"; Tasks: desktopicon; Comment: "Start LAN Quick Transfer server"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\app.ico"; Tasks: desktopicon; Comment: "Start LAN Quick Transfer server"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
