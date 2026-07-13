@@ -3,11 +3,11 @@
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package Name="LAN Quick Transfer"
            Manufacturer="LAN Quick Transfer"
-           Version="1.1.0"
+           Version="1.2.0"
            UpgradeCode="7B3F2A1C-9D4E-4F5A-8B6C-1E2D3F4A5B6C"
            Language="1033"
            Codepage="1252">
-    <SummaryInformation Description="LAN Quick Transfer 1.1.0 installer" />
+    <SummaryInformation Description="LAN Quick Transfer 1.2.0 installer" />
 
     <!-- Major upgrade: uninstall old versions before installing new -->
     <MajorUpgrade DowngradeErrorMessage="A newer version of LAN Quick Transfer is already installed." />
@@ -87,7 +87,7 @@
         <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\LANQuickTransfer"
                        Name="DisplayName" Type="string" Value="LAN Quick Transfer" />
         <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\LANQuickTransfer"
-                       Name="DisplayVersion" Type="string" Value="1.1.0" />
+                       Name="DisplayVersion" Type="string" Value="1.2.0" />
         <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\LANQuickTransfer"
                        Name="Publisher" Type="string" Value="LAN Quick Transfer" />
         <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\LANQuickTransfer"

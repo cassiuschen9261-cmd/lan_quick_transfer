@@ -3,7 +3,7 @@
 param(
     [string]$ProjectRoot = "",
     [string]$OutDir = "",
-    [string]$Version = "1.1.0"
+    [string]$Version = "1.2.0"
 )
 $ErrorActionPreference = "Stop"
 if (-not $ProjectRoot) { $ProjectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot) }

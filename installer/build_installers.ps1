@@ -1,7 +1,7 @@
 # build_installers.ps1
 # End-to-end build: extract Node runtime -> stage payload -> build MSI + EXE
 param(
-    [string]$Version = "1.1.0",
+    [string]$Version = "1.2.0",
     [switch]$SkipExtract
 )
 $ErrorActionPreference = "Stop"
